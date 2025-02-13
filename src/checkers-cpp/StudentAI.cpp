@@ -269,12 +269,14 @@ Move StudentAI::GetMove(Move move) {
     }
 
     // TODO: persist and reuse the previous tree?
-    Node* root = new Node(NULL, Move(), board, player);
+    if (!root || root->board != board) {
+        delete root;
+        root = new Node(nullptr, Move(), board, player);
+    }
     MCTS mcts = MCTS(root, board, player);
-    mcts.runMCTS(1000); // TODO: adjust the number of MCTS iterations
+    mcts.runMCTS(2000); // TODO: adjust the number of MCTS iterations
     Move res = mcts.getBestMove();
 
     board.makeMove(res, player);
     return res;
 }
-

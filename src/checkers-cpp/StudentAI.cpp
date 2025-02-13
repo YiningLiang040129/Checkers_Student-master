@@ -258,6 +258,7 @@ StudentAI::StudentAI(int col,int row,int p) : AI(col, row, p) {
     board = Board(col,row,p);
     board.initializeGame();
     player = 2;
+    root = nullptr;
 }
 
 Move StudentAI::GetMove(Move move) {
@@ -270,7 +271,7 @@ Move StudentAI::GetMove(Move move) {
 
     // TODO: persist and reuse the previous tree?
     if (!root || root->board != board) {
-        delete root;
+        if (root) delete root;
         root = new Node(nullptr, Move(), board, player);
     }
     MCTS mcts = MCTS(root, board, player);
@@ -279,4 +280,11 @@ Move StudentAI::GetMove(Move move) {
 
     board.makeMove(res, player);
     return res;
+}
+
+StudentAI::~StudentAI() {
+    if (root) {
+        delete root;
+        root = nullptr;
+    }
 }

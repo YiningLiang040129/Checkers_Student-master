@@ -40,12 +40,15 @@ public:
 };
 
 
-class StudentAI :public AI
-{
+class StudentAI : public AI {
 public:
     Board board;
-	StudentAI(int col, int row, int p);
-	virtual Move GetMove(Move board);
+    Node* root;  // 添加 root 变量
+
+    StudentAI(int col, int row, int p);
+    virtual Move GetMove(Move board);
+    ~StudentAI();  // 确保释放 root，避免内存泄漏
 };
+
 
 #endif //STUDENTAI_H

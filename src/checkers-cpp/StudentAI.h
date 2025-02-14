@@ -1,11 +1,12 @@
 #ifndef STUDENTAI_H
 #define STUDENTAI_H
+
 #include "AI.h"
 #include "Board.h"
 #include "Move.h"
 #include <vector>
 #include <cmath>
-#include <cstdlib>
+
 #pragma once
 
 // The following part should be completed by students.
@@ -14,18 +15,17 @@
 class Node {
 public:
     Node* parent;
-    std::vector<Node*> children;
-    Board board;
     Move move;
+    Board board;
     int player;
     int visits;
     double wins;
     bool isLeaf;
+    std::vector<Node*> children;
     std::vector<Move> unvisitedMoves;
 
     Node(Node* parent, Move move, Board board, int player)
-        : parent(parent), move(move), board(board), player(player),
-          visits(0), wins(0), isLeaf(false) {}
+        : parent(parent), move(move), board(board), player(player), visits(0), wins(0), isLeaf(false) {}
     
     bool isFullyExpanded();
 };
@@ -44,19 +44,19 @@ public:
     void deleteTree(Node* node);
     ~MCTS();
 
-    // Heuristic function to evaluate board state
+    // Heuristic Functions
     double evaluateBoard(Board board, int player);
     bool leadToForceCapture(Board board, Move move, int player);
     bool causeMoreCaptureByOpponent(Board board, Move move, int player);
     bool isPromoting(Board board, Move move, int player);
-    double getUCT(Node* node);
 };
 
+// The AI class that implements MCTS
 class StudentAI : public AI {
 public:
     Board board;
     int player;
-
+    
     StudentAI(int col, int row, int p);
     virtual Move GetMove(Move move);
 };

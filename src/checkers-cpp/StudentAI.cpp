@@ -1,6 +1,5 @@
 #include "StudentAI.h"
 #include <random>
-#include <algorithm>
 
 //The following part should be completed by students.
 //The students can modify anything except the class name and exisiting functions and varibles.
@@ -25,85 +24,95 @@ double MCTS::getUCT(Node* node) {
     return (double)node->wins / node->visits + 2.0 * sqrt(log(node->parent->visits) / (node->visits + 1e-6));
 }
 
+// New heuristic evaluation function
+// Evaluates board based on piece count, king positions, mobility, and positioning.
 double MCTS::evaluateBoard(Board board, int player) {
-    int myKings = 0, oppKings = 0, myPieces = 0, oppPieces = 0;
-    int myMoves = board.getAllPossibleMoves(player).size();
-    int oppMoves = board.getAllPossibleMoves(3 - player).size();
-    int myCaptureOpportunities = 0, oppCaptureOpportunities = 0;
-
-    for (const auto& row : board.getBoard()) {
-        for (const auto& piece : row) {
+    double score = 0.0;
+    int opponent = (player == 1) ? 2 : 1;
+    
+    int myPieces = 0, oppPieces = 0;
+    int myKings = 0, oppKings = 0;
+    int myMoves = 0, oppMoves = 0;
+    
+    vector<vector<Move>> myPossibleMoves = board.getAllPossibleMoves(player);
+    vector<vector<Move>> oppPossibleMoves = board.getAllPossibleMoves(opponent);
+    
+    myMoves = myPossibleMoves.size();
+    oppMoves = oppPossibleMoves.size();
+    
+    for (int i = 0; i < board.row; i++) {
+        for (int j = 0; j < board.col; j++) {
+            int piece = board.board[i][j];
             if (piece == player) myPieces++;
-            else if (piece == (player + 2)) myKings++;
-            else if (piece == (3 - player)) oppPieces++;
-            else if (piece == (3 - player + 2)) oppKings++;
-        }
-    }
-
-    for (const auto& moves : board.getAllPossibleMoves(player)) {
-        for (const auto& move : moves) {
-            if (move.isCapture()) myCaptureOpportunities++;
+            else if (piece == opponent) oppPieces++;
+            else if (piece == player + 2) myKings++;
+            else if (piece == opponent + 2) oppKings++;
         }
     }
     
-    for (const auto& moves : board.getAllPossibleMoves(3 - player)) {
-        for (const auto& move : moves) {
-            if (move.isCapture()) oppCaptureOpportunities++;
+    // Scoring weights
+    score += 5.0 * (myPieces - oppPieces);
+    score += 7.0 * (myKings - oppKings);
+    score += 1.5 * (myMoves - oppMoves);
+    
+    return score;
+}
+
+bool MCTS::causeMoreCaptureByOpponent(Board board, Move move, int player) {
+    int opponent = player == 1 ? 2 : 1;
+    int numCapturesBefore = 0, numCapturesAfter = 0;
+    
+    vector<vector<Move>> allMovesBefore = board.getAllPossibleMoves(opponent);
+    for (vector<Move> moves : allMovesBefore) {
+        for (Move m : moves) {
+            if (m.isCapture()) numCapturesBefore++;
         }
     }
-
-    return 5 * (myKings - oppKings) + 
-           3 * (myPieces - oppPieces) + 
-           1.5 * (myMoves - oppMoves) + 
-           2 * (myCaptureOpportunities - oppCaptureOpportunities);
+    
+    board.makeMove(move, player);
+    vector<vector<Move>> allMovesAfter = board.getAllPossibleMoves(opponent);
+    for (vector<Move> moves : allMovesAfter) {
+        for (Move m : moves) {
+            if (m.isCapture()) numCapturesAfter++;
+        }
+    }
+    
+    return numCapturesAfter > numCapturesBefore;
 }
 
 int MCTS::simulation(Node* node) {
     Board board = node->board;
     int player = node->player;
-    while (!board.getAllPossibleMoves(player).empty()) {
-        auto moves = board.getAllPossibleMoves(player);
-        Move bestMove;
+    int noCaptureCount = 0;
+    
+    while (true) {
+        vector<vector<Move>> allMoves = board.getAllPossibleMoves(player);
+        if (noCaptureCount >= 40 || allMoves.empty()) {
+            break;
+        }
+        
+        // Select the best move using heuristic evaluation
         double bestScore = -INFINITY;
-        for (const auto& moveSet : moves) {
-            for (const auto& move : moveSet) {
-                double score = evaluateBoard(board, player);
+        Move bestMove;
+        
+        for (vector<Move> moves : allMoves) {
+            for (Move move : moves) {
+                Board tempBoard = board;
+                tempBoard.makeMove(move, player);
+                double score = evaluateBoard(tempBoard, player);
+                
                 if (score > bestScore) {
                     bestScore = score;
                     bestMove = move;
                 }
             }
         }
+        
         board.makeMove(bestMove, player);
-        player = (player == 1 ? 2 : 1);
+        noCaptureCount = bestMove.isCapture() ? 0 : noCaptureCount + 1;
+        player = player == 1 ? 2 : 1;
     }
-    return board.isWin(player);
-}
-
-void MCTS::runMCTS(int time) {
-    for (int i = 0; i < time; i++) {
-        Node* selectedNode = selectNode(root);
-        Node* expandedNode = expandNode(selectedNode);
-        if (expandedNode == nullptr) {
-            continue;
-        }
-        int result = simulation(expandedNode);
-        backPropagation(expandedNode, result);
-    }
-}
-
-Move StudentAI::GetMove(Move move) {
-    if (move.seq.empty())
-    {
-        player = 1;
-    } else{
-        board.makeMove(move,player == 1?2:1);
-    }
-
-    Node* root = new Node(NULL, Move(), board, player);
-    MCTS mcts = MCTS(root, board, player);
-    mcts.runMCTS(5000);
-    Move res = mcts.getBestMove();
-    board.makeMove(res, player);
-    return res;
+    
+    int result = board.isWin(node->player);
+    return (result == node->player) ? 1 : (result == 0 ? -1 : 0);
 }

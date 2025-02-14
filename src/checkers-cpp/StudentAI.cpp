@@ -28,35 +28,40 @@ double MCTS::getUCT(Node* node) {
 // Evaluates board based on piece count, king positions, mobility, and positioning.
 double MCTS::evaluateBoard(Board board, int player) {
     double score = 0.0;
-    int opponent = (player == 1) ? 2 : 1;
-    
+    string myColor = (player == 1) ? "B" : "W";
+    string oppColor = (player == 1) ? "W" : "B";
+
     int myPieces = 0, oppPieces = 0;
     int myKings = 0, oppKings = 0;
     int myMoves = 0, oppMoves = 0;
-    
+
     vector<vector<Move>> myPossibleMoves = board.getAllPossibleMoves(player);
-    vector<vector<Move>> oppPossibleMoves = board.getAllPossibleMoves(opponent);
-    
+    vector<vector<Move>> oppPossibleMoves = board.getAllPossibleMoves(3 - player);
+
     myMoves = myPossibleMoves.size();
     oppMoves = oppPossibleMoves.size();
-    
+
     for (int i = 0; i < board.row; i++) {
         for (int j = 0; j < board.col; j++) {
-            int piece = board.board[i][j].player; 
-            if (piece == player) myPieces++;
-            else if (piece == opponent) oppPieces++;
-            else if (piece == player + 2) myKings++;
-            else if (piece == opponent + 2) oppKings++;
+            Checker &piece = board.board[i][j];  // Access checker piece
+            if (piece.color == myColor) {
+                myPieces++;
+                if (piece.isKing) myKings++;
+            } else if (piece.color == oppColor) {
+                oppPieces++;
+                if (piece.isKing) oppKings++;
+            }
         }
     }
-    
+
     // Scoring weights
     score += 5.0 * (myPieces - oppPieces);
     score += 7.0 * (myKings - oppKings);
     score += 1.5 * (myMoves - oppMoves);
-    
+
     return score;
 }
+
 
 bool MCTS::causeMoreCaptureByOpponent(Board board, Move move, int player) {
     int opponent = player == 1 ? 2 : 1;

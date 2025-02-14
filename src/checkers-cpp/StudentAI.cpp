@@ -42,7 +42,7 @@ double MCTS::evaluateBoard(Board board, int player) {
     
     for (int i = 0; i < board.row; i++) {
         for (int j = 0; j < board.col; j++) {
-            int piece = board.board[i][j];
+            int piece = board.board[i][j].player; 
             if (piece == player) myPieces++;
             else if (piece == opponent) oppPieces++;
             else if (piece == player + 2) myKings++;

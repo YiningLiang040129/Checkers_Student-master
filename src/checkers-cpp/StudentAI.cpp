@@ -169,9 +169,9 @@ Node* MCTS::expandNode(Node* node) {
         int winning_player = node->board.isWin(node->player);
         int opponent = node->player == 1 ? 2 : 1;
         if (winning_player == root->player) { // return 1 if the root player wins
-            result = 1;
-        } else if (winning_player == opponent) { // return 0 if the root player loses
             result = 0;
+        } else if (winning_player == opponent) { // return 0 if the root player loses
+            result = 1;
         } else { // else return -1 if it's a tie
             result = -1;
         }
@@ -241,7 +241,7 @@ int MCTS::simulation(Node* node) {
                     score += 2.0;
                 }
                 
-                score += isVulnerableMove(board, move, player); // check if move leads to more captures by opponent
+                // score += isVulnerableMove(board, move, player); // check if move leads to more captures by opponent
                 // cout << " Vulnerable+ " << score;
 
                 if (isPromoting(board, move, player)) { // check if next move will promote
@@ -251,7 +251,7 @@ int MCTS::simulation(Node* node) {
 
                 // cout << endl;
 
-                // score += generalBoardPositionEvaluation(board, move, player); // evaluate the board position after the move
+                score += generalBoardPositionEvaluation(board, move, player); // evaluate the board position after the move
 
                 if (score > bestScore) {
                     bestScore = score;
@@ -269,13 +269,14 @@ int MCTS::simulation(Node* node) {
             noCaptureCount++;
         }
 
-        // else { // simulate random moves for the opponent
-        //     int i = rand() % (allMoves.size());
-        //     vector<Move> checker_moves = allMoves[i];
-        //     int j = rand() % (checker_moves.size());
-        //     Move randomMove = checker_moves[j];
-        //     board.makeMove(randomMove, player);
-        // }
+        // simulate random moves for the opponent
+        // int i = rand() % (allMoves.size());
+        // vector<Move> checker_moves = allMoves[i];
+        // int j = rand() % (checker_moves.size());
+        // Move randomMove = checker_moves[j];
+        // board.makeMove(randomMove, player);
+        // lastMovedPlayer = player;
+        
 
         player = player == 1 ? 2 : 1;
         
@@ -284,9 +285,9 @@ int MCTS::simulation(Node* node) {
     int result = board.isWin(lastMovedPlayer);
     int opponent = root->player == 1 ? 2 : 1;
     if (result == root->player) { // return 1 if the root player wins
-        return 1;
-    } else if (result == opponent) { // return 0 if the root player loses
         return 0;
+    } else if (result == opponent) { // return 0 if the root player loses
+        return 1;
     } 
     // else return -1 if it's a tie
     return -1;
@@ -307,7 +308,7 @@ void MCTS::backPropagation(Node* node, int result) {
             } else if (result == 0) { // -1 for losing
                 current->wins -= 1; 
             } else { // 0 for tie  though kask said we consider tie as a win?
-                current->wins += 0.5;
+                // current->wins += 0.5;
             } 
         } else {
             if (result == 1) { // -1 for losing to player (as the opponent)
@@ -315,7 +316,7 @@ void MCTS::backPropagation(Node* node, int result) {
             } else if (result == 0) { // +1 for winning (as the opponent)
                 current->wins += 1;
             } else {
-                current->wins += 0.5;
+                // current->wins += 0.5;
             }
         }
 
@@ -337,24 +338,15 @@ void MCTS::runMCTS(int time) {
     
 }
 
-// picking the best move based the the most wins
+// picking the best move based the the most wins per visit
 Move MCTS::getBestMove() { 
-    // double bestUCT = -INFINITY;
-    // Move bestMove;
-    // for (Node *child : root->children) { // calculate the beest UCT value among the children of the root node
-    //     double UCT = getUCT(child);
-    //     if (UCT > bestUCT) {
-    //         bestUCT = UCT;
-    //         bestMove = child->move;
-    //     }
-    // }
-
-    int mostWins = -1;
+    double mostWinsPerVisit = -INFINITY;
     Move bestMove;
     for (Node *child : root->children) { // find the child with the most visits
-        cout << "Child move: " << child->move.toString() << ", visits: " << child->visits << ", wins: " << child->wins << endl;
-        if (child->wins > mostWins) {
-            mostWins = child->wins;
+        // cout << "Child move: " << child->move.toString() << ", visits: " << child->visits << ", wins: " << child->wins << endl;
+        double currentWinsPerVisit = child->wins / child->visits;
+        if (currentWinsPerVisit > mostWinsPerVisit) {
+            mostWinsPerVisit = currentWinsPerVisit;
             bestMove = child->move;
         }
     }

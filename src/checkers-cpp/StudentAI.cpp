@@ -187,9 +187,9 @@ Node* MCTS::expandNode(Node* node) {
         int winning_player = node->board.isWin(node->player);
         int opponent = node->player == 1 ? 2 : 1;
         if (winning_player == root->player) { // return 1 if the root player wins
-            result = 0;
-        } else if (winning_player == opponent) { // return 0 if the root player loses
             result = 1;
+        } else if (winning_player == opponent) { // return 0 if the root player loses
+            result = 0;
         } else { // else return -1 if it's a tie
             result = -1;
         }
@@ -296,9 +296,9 @@ int MCTS::simulation(Node* node) {
     int result = board.isWin(lastMovedPlayer);
     int opponent = root->player == 1 ? 2 : 1;
     if (result == root->player) { // return 1 if the root player wins
-        return 0;
-    } else if (result == opponent) { // return 0 if the root player loses
         return 1;
+    } else if (result == opponent) { // return 0 if the root player loses
+        return 0;
     } 
     // else return -1 if it's a tie
     return -1;
@@ -314,17 +314,17 @@ void MCTS::backPropagation(Node* node, int result) {
 
         // TODO: adjust the backpropagation details
         if (current->player == root->player) {
-            if (result == 1) { // +1 if current player is root and wins
+            if (result == 0) { // +1 if current player is root and wins
                 current->wins += 1; 
-            } else if (result == 0) { // -1 for losing
+            } else if (result == 1) { // -1 for losing
                 current->wins -= 1; 
             } else { // 0 for tie  though kask said we consider tie as a win?
                 // current->wins += 0.5;
             } 
         } else {
-            if (result == 1) { // -1 for losing to player (as the opponent)
+            if (result == 0) { // -1 for losing to player (as the opponent)
                 current->wins -= 1; 
-            } else if (result == 0) { // +1 for winning (as the opponent)
+            } else if (result == 1) { // +1 for winning (as the opponent)
                 current->wins += 1;
             } else {
                 // current->wins += 0.5;

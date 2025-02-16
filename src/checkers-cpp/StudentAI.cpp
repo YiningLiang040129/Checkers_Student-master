@@ -1,6 +1,4 @@
 #include "StudentAI.h"
-#include <random>
-#include <algorithm>
 
 //The following part should be completed by students.
 //The students can modify anything except the class name and exisiting functions and varibles.
@@ -8,7 +6,7 @@
 // interactive MCTS website: https://vgarciasc.github.io/mcts-viz/
 // MCTS algorithm explained: https://gibberblot.github.io/rl-notes/single-agent/mcts.html
 
-MCTS::MCTS(Node* root, Board board, int player) {
+MCTS::MCTS(Node* root, Board &board, int player) {
     this->root = root;
     this->root->board = board;
     this->root->player = player;
@@ -21,6 +19,23 @@ Node* MCTS::findChildNode(Node* node, const Move &move) {
         }
     }
     return nullptr;
+}
+
+// reuse the same tree by re-rooting the tree to the new root and delete the old parts of the tree
+Node* MCTS::reRoot(Node *root, const Move &move) {
+    Node *newRoot = MCTS::findChildNode(root, move);
+    if (newRoot == nullptr) { // delete the tree if for some reason the new root is not found
+        MCTS::deleteTree(root);
+        return nullptr;
+    } else {
+        if (newRoot->parent != nullptr && newRoot != root) { // detach the new root from the tree so that deleteTree won't delete newRoot
+            vector<Node*>& childrenVector = newRoot->parent->children;
+            childrenVector.erase(remove(childrenVector.begin(), childrenVector.end(), newRoot), childrenVector.end());
+            newRoot->parent = nullptr;
+            MCTS::deleteTree(root);
+        }
+        return newRoot;
+    }
 }
 
 bool Node::isFullyExpanded() { // a node is fully expanded if all children have been visited or the node is a leaf node (or is it called terminal node?)
@@ -45,7 +60,7 @@ bool MCTS::isForceCapture(const Move &move) {
 }
 
 // check if player's move can be captured by opponent
-double MCTS::isVulnerableMove(Board board, const Move &move, int player) {
+double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
     int opponent = player == 1 ? 2 : 1;
 
     int numCapturesBefore = 0;
@@ -65,11 +80,14 @@ double MCTS::isVulnerableMove(Board board, const Move &move, int player) {
     for (vector<Move> moves : allMoves) {
         for (Move m : moves) {
             if (isForceCapture(m)) { // it's a REALLY bad move if opponent can force capture you (immediately return true)
+                board.Undo();
                 return -5.0;
             }
             numCapturesAfter++;
         }
     }
+
+    board.Undo();
 
     if (numCapturesAfter > numCapturesBefore) {
         return -2.0; // penalty if move pieces are vulnerable after the move
@@ -90,7 +108,7 @@ bool MCTS::isPromoting(const Board &board, const Move &move, int player) {
 }
 
 // evaluate the board position after the momve and returns the score
-double MCTS::generalBoardPositionEvaluation(Board board, const Move &move, int player) {
+double MCTS::generalBoardPositionEvaluation(Board &board, const Move &move, int player) {
     double score = 0.0;
     board.makeMove(move, player);
 
@@ -136,7 +154,7 @@ double MCTS::generalBoardPositionEvaluation(Board board, const Move &move, int p
         }
     }
 
-
+    board.Undo();
     return scoreMultiplier * score;
 }
 
@@ -230,26 +248,19 @@ int MCTS::simulation(Node* node) {
         for (vector<Move> moves : allMoves) {
             for (Move move : moves) {
                 double score = 0.0;
-                // cout << "Move: " << move.toString();
                 if (move.isCapture()) { // direct capture
-                    // cout << " Capture +2.0";
                     score += 2.0;
                 }
 
                 if (isForceCapture(move)) { // check if move is a force capture
-                    // cout << " Force Capture +2.0";
                     score += 2.0;
                 }
                 
                 // score += isVulnerableMove(board, move, player); // check if move leads to more captures by opponent
-                // cout << " Vulnerable+ " << score;
 
                 if (isPromoting(board, move, player)) { // check if next move will promote
-                    // cout << " Promote +1.0";
                     score += 1.0;
                 }
-
-                // cout << endl;
 
                 score += generalBoardPositionEvaluation(board, move, player); // evaluate the board position after the move
 
@@ -371,30 +382,40 @@ StudentAI::StudentAI(int col,int row,int p) : AI(col, row, p) {
     player = 2;
 }
 
-
-
-Move StudentAI::GetMove(Move move) {
+// make random move
+Move StudentAI::GetRandomMove(Move move) {
     if (move.seq.empty())
     {
         player = 1;
     } else {
-        // re-root the tree based on the opponent's move
         board.makeMove(move,player == 1?2:1);
-        if (MCTSRoot != nullptr) {
-            Node *newRoot = MCTS::findChildNode(MCTSRoot, move);
-            if (newRoot == nullptr) { // delete the tree if opponent's move is not found in the tree
-                MCTS::deleteTree(MCTSRoot);
-                MCTSRoot = nullptr;
-            } else {
-                if (newRoot->parent != nullptr && newRoot != MCTSRoot) {
-                    vector<Node*>& childrenVector = newRoot->parent->children;
-                    childrenVector.erase(remove(childrenVector.begin(), childrenVector.end(), newRoot), childrenVector.end());
-                    newRoot->parent = nullptr;
-                    MCTS::deleteTree(MCTSRoot);
-                }
-                MCTSRoot = newRoot;
-            }
-        }
+    }
+
+    vector<vector<Move>> allMoves = board.getAllPossibleMoves(player);
+    int i = rand() % (allMoves.size());
+    vector<Move> checker_moves = allMoves[i];
+    int j = rand() % (checker_moves.size());
+
+    board.makeMove(checker_moves[j], player);
+
+    return checker_moves[j];
+}
+
+
+Move StudentAI::GetMove(Move move) {
+    auto start = high_resolution_clock::now();
+    auto remainingTime = timeLimit - timeElapsed;
+    if (remainingTime < seconds(4)) { // return random move if only has 4 seconds left
+        return GetRandomMove(move); // no need to keep track of the remaining time if started using random moves
+    }
+
+    if (move.seq.empty())
+    {
+        player = 1;
+    } else {
+        // re-root to the opponent's move if it's in the tree, otherwise start a new tree
+        board.makeMove(move,player == 1?2:1);
+        MCTSRoot = MCTS::reRoot(MCTSRoot, move);
     }
 
     if (MCTSRoot == nullptr) { // start a new tree if root is nullptr
@@ -406,22 +427,13 @@ Move StudentAI::GetMove(Move move) {
 
     board.makeMove(res, player);
 
+    // re-root to the player's next move
+    MCTSRoot = MCTS::reRoot(MCTSRoot, res);
 
-    // reuse the same tree by re-rooting the tree to the new root and delete the old parts of the tree
-    Node *newRoot = MCTS::findChildNode(MCTSRoot, res);
-    if (newRoot == nullptr) { // delete the tree if for some reason the new root is not found
-        MCTS::deleteTree(MCTSRoot);
-        MCTSRoot = nullptr;
-    } else {
-        if (newRoot->parent != nullptr && newRoot != MCTSRoot) { // detach the new root from the tree so that deleteTree won't delete newRoot
-            vector<Node*>& childrenVector = newRoot->parent->children;
-            childrenVector.erase(remove(childrenVector.begin(), childrenVector.end(), newRoot), childrenVector.end());
-            newRoot->parent = nullptr;
-            MCTS::deleteTree(MCTSRoot);
-        }
-        MCTSRoot = newRoot;
-    }
-
+    auto stop = high_resolution_clock::now();
+    timeElapsed += duration_cast<milliseconds>(stop - start);
+    // cout << "Move took: " << duration_cast<seconds>(stop - start).count() << " seconds" << endl;
+    // cout << "Time elapsed: " << duration_cast<seconds>(timeElapsed).count() << " seconds" << endl;
     return res;
 }
 

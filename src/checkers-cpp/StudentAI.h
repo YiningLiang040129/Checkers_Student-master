@@ -2,6 +2,10 @@
 #define STUDENTAI_H
 #include "AI.h"
 #include "Board.h"
+#include <chrono>
+#include <random>
+#include <algorithm>
+using namespace std::chrono;
 #pragma once
 
 //The following part should be completed by students.
@@ -26,7 +30,7 @@ public:
 class MCTS {
 public:
 	Node* root;
-	MCTS(Node* root, Board board, int player);
+	MCTS(Node* root, Board &board, int player);
 	Node* selectNode(Node* node);
 	Node* expandNode(Node* node);
 	int simulation(Node* node);
@@ -35,11 +39,12 @@ public:
 	void runMCTS(int time);
 	Move getBestMove();
 	bool isForceCapture(const Move &move);
-	double isVulnerableMove(Board board, const Move &move, int player);
+	double isVulnerableMove(Board &board, const Move &move, int player);
 	bool isPromoting(const Board &board, const Move &move, int player);
-	double generalBoardPositionEvaluation(Board board, const Move &move, int player);
+	double generalBoardPositionEvaluation(Board &board, const Move &move, int player);
 	static Node* findChildNode(Node* node, const Move &move);
 	static void deleteTree(Node* node);
+	static Node* reRoot(Node *root, const Move &move);
 };
 
 
@@ -48,8 +53,11 @@ class StudentAI :public AI
 public:
     Board board;
 	Node* MCTSRoot = nullptr;
+	duration<double, std::milli> timeElapsed = duration<double, std::milli>::zero();
+	const duration<double, std::milli> timeLimit = minutes(8); // 8 minutes total time limit
 	StudentAI(int col, int row, int p);
-	virtual Move GetMove(Move board);
+	virtual Move GetMove(Move move);
+	Move GetRandomMove(Move move);
 	~StudentAI();
 };
 

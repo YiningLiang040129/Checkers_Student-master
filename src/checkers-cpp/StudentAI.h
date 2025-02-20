@@ -38,7 +38,7 @@ public:
 	double getUCT(Node* node);
 	void runMCTS(int time);
 	Move getBestMove();
-	bool isForceCapture(const Move &move);
+	bool isMultipleCapture(const Move &move);
 	double isVulnerableMove(Board &board, const Move &move, int player);
 	bool isPromoting(const Board &board, const Move &move, int player);
 	double generalBoardPositionEvaluation(Board &board, const Move &move, int player);

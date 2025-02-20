@@ -1,63 +1,45 @@
 #!/usr/bin/env bash
-# 运行不同棋盘大小和双方先后手的所有可能情况
+# Run matches with various board sizes
 
-NUM_RUNS=10      # 每种情况的比赛局数
-k=2              # k 参数常量，可以根据需要调整
+NUM_RUNS=100  # number of runs for each board size
+k=2  # keep the k parameter constant; adjust if needed
 
-# 棋盘行和列尺寸数组 (例如：5x5, 6x6, …, 10x10)
+# Define arrays for board dimensions.
+# For example, board sizes 7x7, 8x8, and 9x9:
 rows=(5 6 7 8 9 10)
 cols=(5 6 7 8 9 10)
 
-# 循环每一种棋盘大小
+# Loop over each board size
 for idx in "${!rows[@]}"; do
     row="${rows[$idx]}"
     col="${cols[$idx]}"
+    
+    winsAI1=0
+    winsAI2=0
+    ties=0
 
-    # 对两种先手情况分别测试
-    # order=1 表示 main.py 为玩家1，checkers-cpp/main 为玩家2
-    # order=2 表示 main.py 为玩家2，checkers-cpp/main 为玩家1
-    for order in 1 2; do
-        winsMain=0
-        winsOpp=0
-        ties=0
-
-        echo "===================================="
-        echo "棋盘尺寸: ${col} x ${row} ，main.py 作为玩家 ${order}"
+    echo "===================================="
+    echo "Running matches for board size: ${col} x ${row}"
+    
+    for i in $(seq 1 $NUM_RUNS); do
+        # Run the game and capture output.
+        OUTPUT=$(python3 main.py $col $row $k l ../checkers-cpp/main main.py)
         
-        for i in $(seq 1 $NUM_RUNS); do
-            if [ "$order" -eq 1 ]; then
-                # main.py 为玩家1
-                OUTPUT=$(python3 main.py $col $row $k l ../checkers-cpp/main main.py)
-            else
-                # main.py 为玩家2
-                OUTPUT=$(python3 main.py $col $row $k l main.py ../checkers-cpp/main)
-            fi
+        # Check which player won (or if it was a tie)
+        if echo "$OUTPUT" | grep -iq "player 1 wins"; then
+            winsAI1=$((winsAI1+1))
+        elif echo "$OUTPUT" | grep -iq "player 2 wins"; then
+            winsAI2=$((winsAI2+1))
+        elif echo "$OUTPUT" | grep -iq "Tie"; then
+            ties=$((ties+1))
+        fi
 
-            # 根据输出判断获胜情况
-            if echo "$OUTPUT" | grep -iq "player 1 wins"; then
-                if [ "$order" -eq 1 ]; then
-                    winsMain=$((winsMain+1))
-                else
-                    winsOpp=$((winsOpp+1))
-                fi
-            elif echo "$OUTPUT" | grep -iq "player 2 wins"; then
-                if [ "$order" -eq 1 ]; then
-                    winsOpp=$((winsOpp+1))
-                else
-                    winsMain=$((winsMain+1))
-                fi
-            elif echo "$OUTPUT" | grep -iq "Tie"; then
-                ties=$((ties+1))
-            fi
-
-            echo "第 $i 局结束: main.py 胜: $winsMain, 对手胜: $winsOpp, 平局: $ties"
-        done
-
-        echo "-------------------------------------"
-        echo "棋盘尺寸 ${col} x ${row} ，main.py 作为玩家 ${order} 的最终结果："
-        echo "main.py 胜局: $winsMain"
-        echo "对手胜局: $winsOpp"
-        echo "平局: $ties"
-        echo ""
+        echo "Round $i finished: P1: $winsAI1, P2: $winsAI2, Ties: $ties"
     done
+
+    echo "-------------------------------------"
+    echo "Results for board size ${col} x ${row}:"
+    echo "Player 1 (../checkers-cpp/main) wins: $winsAI1"
+    echo "Player 2 (main.py) wins: $winsAI2"
+    echo "Ties: $ties"
 done

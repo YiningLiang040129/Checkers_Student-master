@@ -376,10 +376,12 @@ void MCTS::deleteTree(Node* node) { // TODO: check memory leak?
 }
 
 
-StudentAI::StudentAI(int col,int row,int p) : AI(col, row, p) {
-    board = Board(col,row,p);
+StudentAI::StudentAI(int col, int row, int p) : AI(col, row, p)
+{
+    board = Board(col, row, p);
     board.initializeGame();
-    player = 2;
+    player = p;   // <-- Use p, do NOT overwrite with player=2 unconditionally!
+    MCTSRoot = nullptr;  // <-- Initialize the tree pointer to null
 }
 
 // make random move
@@ -409,18 +411,21 @@ Move StudentAI::GetMove(Move move) {
         return GetRandomMove(move); // no need to keep track of the remaining time if started using random moves
     }
 
-    if (move.seq.empty())
-    {
+    if (move.seq.empty()) {
         player = 1;
     } else {
         // re-root to the opponent's move if it's in the tree, otherwise start a new tree
-        board.makeMove(move,player == 1?2:1);
-        MCTSRoot = MCTS::reRoot(MCTSRoot, move);
+        board.makeMove(move, player == 1 ? 2 : 1);
+
+        if (MCTSRoot != nullptr) { // Ensure we don't dereference an uninitialized pointer
+            MCTSRoot = MCTS::reRoot(MCTSRoot, move);
+        }
     }
 
     if (MCTSRoot == nullptr) { // start a new tree if root is nullptr
         MCTSRoot = new Node(nullptr, Move(), board, player);
     }
+
     MCTS mcts = MCTS(MCTSRoot, board, player);
     mcts.runMCTS(1000); // TODO: adjust the number of MCTS iterations
     Move res = mcts.getBestMove();
@@ -436,6 +441,7 @@ Move StudentAI::GetMove(Move move) {
     // cout << "Time elapsed: " << duration_cast<seconds>(timeElapsed).count() << " seconds" << endl;
     return res;
 }
+
 
 
 StudentAI::~StudentAI() {

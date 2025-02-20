@@ -51,8 +51,8 @@ double MCTS::getUCT(Node* node) {
 }
 
 // force capture that can capture multiple pieces
-bool MCTS::isForceCapture(const Move &move) {
-    if (move.seq.size() > 2) { // if move has 3 positions, then it's a force capture
+bool MCTS::isMultipleCapture(const Move &move) {
+    if (move.seq.size() > 2) { // if move has 3 positions, then it's a 2+ capture move
         return true;
     }
 
@@ -79,7 +79,7 @@ double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
     vector<vector<Move>> allMoves = board.getAllPossibleMoves(opponent);
     for (vector<Move> moves : allMoves) {
         for (Move m : moves) {
-            if (isForceCapture(m)) { // it's a REALLY bad move if opponent can force capture you (immediately return true)
+            if (isMultipleCapture(m)) { // it's a REALLY bad move if opponent can capture multiple pieces
                 board.Undo();
                 return -5.0;
             }
@@ -184,8 +184,8 @@ Node* MCTS::expandNode(Node* node) {
 
         // directly run backpropagation if the selected node is a leaf node
         int result = -1;
-        int winning_player = node->board.isWin(node->player);
-        int opponent = node->player == 1 ? 2 : 1;
+        int opponent = node->player == 1 ? 2 : 1; // if current player has no move, then the last moved player is the opponent
+        int winning_player = 3 - node->board.isWin(opponent); // flip the result since isWin might be flipped
         if (winning_player == root->player) { // return 1 if the root player wins
             result = 1;
         } else if (winning_player == opponent) { // return 0 if the root player loses
@@ -252,7 +252,7 @@ int MCTS::simulation(Node* node) {
                     score += 2.0;
                 }
 
-                if (isForceCapture(move)) { // check if move is a force capture
+                if (isMultipleCapture(move)) { // check if move is a force capture
                     score += 2.0;
                 }
                 
@@ -293,15 +293,15 @@ int MCTS::simulation(Node* node) {
         
     }
 
-    int result = board.isWin(lastMovedPlayer);
+    int winning_player = 3 - board.isWin(lastMovedPlayer); // flip the result since isWin might be flipped
     int opponent = root->player == 1 ? 2 : 1;
-    if (result == root->player) { // return 1 if the root player wins
+    if (winning_player == root->player) { // return 1 if the root player wins
         return 1;
-    } else if (result == opponent) { // return 0 if the root player loses
+    } else if (winning_player == opponent) { // return 0 if the root player loses
         return 0;
-    } 
-    // else return -1 if it's a tie
-    return -1;
+    } else { // else return -1 if it's a tie
+        return -1;
+    }
 }
 
 void MCTS::backPropagation(Node* node, int result) {
@@ -314,7 +314,7 @@ void MCTS::backPropagation(Node* node, int result) {
 
         // TODO: adjust the backpropagation details
         if (current->player == root->player) {
-            if (result == 0) { // +1 if current player is root and wins
+            if (result == 1) { // +1 if current player is root and wins
                 current->wins += 1; 
             } else if (result == 1) { // -1 for losing
                 current->wins -= 1; 
@@ -322,7 +322,7 @@ void MCTS::backPropagation(Node* node, int result) {
                 // current->wins += 0.5;
             } 
         } else {
-            if (result == 0) { // -1 for losing to player (as the opponent)
+            if (result == 1) { // -1 for losing to player (as the opponent)
                 current->wins -= 1; 
             } else if (result == 1) { // +1 for winning (as the opponent)
                 current->wins += 1;
@@ -376,12 +376,10 @@ void MCTS::deleteTree(Node* node) { // TODO: check memory leak?
 }
 
 
-StudentAI::StudentAI(int col, int row, int p) : AI(col, row, p)
-{
-    board = Board(col, row, p);
+StudentAI::StudentAI(int col,int row,int p) : AI(col, row, p) {
+    board = Board(col,row,p);
     board.initializeGame();
-    player = p;   // <-- Use p, do NOT overwrite with player=2 unconditionally!
-    MCTSRoot = nullptr;  // <-- Initialize the tree pointer to null
+    player = 2;
 }
 
 // make random move
@@ -411,13 +409,13 @@ Move StudentAI::GetMove(Move move) {
         return GetRandomMove(move); // no need to keep track of the remaining time if started using random moves
     }
 
-    if (move.seq.empty()) {
+    if (move.seq.empty())
+    {
         player = 1;
     } else {
         // re-root to the opponent's move if it's in the tree, otherwise start a new tree
-        board.makeMove(move, player == 1 ? 2 : 1);
-
-        if (MCTSRoot != nullptr) { // Ensure we don't dereference an uninitialized pointer
+        board.makeMove(move,player == 1?2:1);
+        if (MCTSRoot) { // re root if MCTSRoot is not nullptr
             MCTSRoot = MCTS::reRoot(MCTSRoot, move);
         }
     }
@@ -425,7 +423,6 @@ Move StudentAI::GetMove(Move move) {
     if (MCTSRoot == nullptr) { // start a new tree if root is nullptr
         MCTSRoot = new Node(nullptr, Move(), board, player);
     }
-
     MCTS mcts = MCTS(MCTSRoot, board, player);
     mcts.runMCTS(1000); // TODO: adjust the number of MCTS iterations
     Move res = mcts.getBestMove();
@@ -441,7 +438,6 @@ Move StudentAI::GetMove(Move move) {
     // cout << "Time elapsed: " << duration_cast<seconds>(timeElapsed).count() << " seconds" << endl;
     return res;
 }
-
 
 
 StudentAI::~StudentAI() {

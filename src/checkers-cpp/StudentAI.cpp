@@ -293,8 +293,6 @@ int MCTS::simulation(Node* node) {
                     }
                 }
                 
-                // Adjust promotion importance dynamically
-                double promotionBonus = 1.0;
                 if (totalPieces < 8) { // Late game, promote bonus is higher
                     promotionBonus = 1.5;
                 }

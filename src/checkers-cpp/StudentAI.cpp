@@ -283,8 +283,19 @@ int MCTS::simulation(Node* node) {
                 
                 // Adjust promotion bonus dynamically (more weight in endgame)
                 double promotionBonus = 1.0;
-                int totalPieces = board.getTotalPieces(); // assumes Board::getTotalPieces() is available
-                if (totalPieces < 8) {
+                // Manually count the remaining pieces on the board
+                int totalPieces = 0;
+                for (int i = 0; i < board.row; i++) {
+                    for (int j = 0; j < board.col; j++) {
+                        if (board.board[i][j].color == "B" || board.board[i][j].color == "W") {
+                            totalPieces++;
+                        }
+                    }
+                }
+                
+                // Adjust promotion importance dynamically
+                double promotionBonus = 1.0;
+                if (totalPieces < 8) { // Late game, promote bonus is higher
                     promotionBonus = 1.5;
                 }
                 if (isPromoting(board, move, player)) {

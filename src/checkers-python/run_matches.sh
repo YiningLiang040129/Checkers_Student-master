@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Run matches with various board sizes
 
-NUM_RUNS=50  # number of runs for each board size
+NUM_RUNS=10  # number of runs for each board size
 k=2  # keep the k parameter constant; adjust if needed
 
 # Define arrays for board dimensions.
 # For example, board sizes 5x5, 6x6, ... 10x10:
-rows=(5 6 7 8 9 10)
-cols=(5 6 7 8 9 10)
+rows=(6 7 8)
+cols=(6 7 8)
 
 # Loop over each board size
 for idx in "${!rows[@]}"; do

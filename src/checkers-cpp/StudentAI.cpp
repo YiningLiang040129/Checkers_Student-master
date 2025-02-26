@@ -63,38 +63,45 @@ bool MCTS::isMultipleCapture(const Move &move) {
 
 // Evaluate if a move leaves our pieces vulnerable to counter-capture
 double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
-    int opponent = player == 1 ? 2 : 1;
-    int numCapturesBefore = 0;
+    int opponent = (player == 1) ? 2 : 1;
+
+    // Step 1: Get opponent's possible captures BEFORE making the move
+    unordered_set<Position> opponentCapturesBefore;
     vector<vector<Move>> allMovesBefore = board.getAllPossibleMoves(opponent);
-    for (auto moves : allMovesBefore) {
-        for (auto m : moves) {
+    for (const auto &moves : allMovesBefore) {
+        for (const auto &m : moves) {
             if (m.isCapture()) {
-                numCapturesBefore++;
+                opponentCapturesBefore.insert(m.seq.back()); // Store capture positions
             }
         }
     }
-    
+
+    // Step 2: Make the move
     board.makeMove(move, player);
-    
-    int numCapturesAfter = 0;
-    vector<vector<Move>> allMoves = board.getAllPossibleMoves(opponent);
-    for (auto moves : allMoves) {
-        for (auto m : moves) {
-            if (isMultipleCapture(m)) { // heavy penalty if opponent can chain capture
+
+    // Step 3: Get opponent's possible captures AFTER making the move
+    unordered_set<Position> opponentCapturesAfter;
+    vector<vector<Move>> allMovesAfter = board.getAllPossibleMoves(opponent);
+    for (const auto &moves : allMovesAfter) {
+        for (const auto &m : moves) {
+            if (isMultipleCapture(m)) { 
                 board.Undo();
-                return -5.0;
+                return -5.0; // Heavy penalty for chain captures
             }
-            numCapturesAfter++;
+            opponentCapturesAfter.insert(m.seq.back());
         }
     }
-    
+
+    // Step 4: Undo move
     board.Undo();
-    
-    if (numCapturesAfter > numCapturesBefore) {
-        return -2.0; // penalty if move increases opponent’s capture opportunities
+
+    // Step 5: Compute risk penalty
+    int newVulnerabilities = opponentCapturesAfter.size() - opponentCapturesBefore.size();
+    if (newVulnerabilities > 0) {
+        return -2.0 * newVulnerabilities; // Scale penalty based on risk increase
     }
-    
-    return 1.0;
+
+    return 1.0; // Safe move
 }
 
 // Check if the move results in a promotion (to King)

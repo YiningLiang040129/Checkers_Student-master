@@ -14,6 +14,7 @@ using namespace std;
 
 #pragma once
 
+// Node represents a state in the search tree.
 class Node {
 public:
     Node* parent;
@@ -30,6 +31,7 @@ public:
     bool isFullyExpanded();
 };
 
+// MCTS encapsulates the Monte Carlo Tree Search logic.
 class MCTS {
 public:
     Node* root;
@@ -49,8 +51,10 @@ public:
     static Node* findChildNode(Node* node, const Move &move);
     static void deleteTree(Node* node);
     static Node* reRoot(Node *root, const Move &move);
+    int checkWin(const Board &board);
 };
 
+// StudentAI implements the AI interface using MCTS.
 class StudentAI : public AI {
 public:
     Board board;

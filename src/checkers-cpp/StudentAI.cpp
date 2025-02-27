@@ -4,6 +4,7 @@
 #include <chrono>
 #include <random>
 #include <iostream>
+#include <set>  // Use set instead of unordered_set
 using namespace std;
 using namespace std::chrono;
 
@@ -24,14 +25,14 @@ Node* MCTS::findChildNode(Node* node, const Move &move) {
     return nullptr;
 }
 
-// reuse the same tree by re-rooting the tree to the new root and deleting unused nodes
+// reuse the same tree by re-rooting the tree to the new root and delete the old parts of the tree
 Node* MCTS::reRoot(Node *root, const Move &move) {
     Node *newRoot = MCTS::findChildNode(root, move);
     if (newRoot == nullptr) { // delete the tree if for some reason the new root is not found
         MCTS::deleteTree(root);
         return nullptr;
     } else {
-        if (newRoot->parent != nullptr && newRoot != root) { // detach the new root so that deleteTree won't delete newRoot
+        if (newRoot->parent != nullptr && newRoot != root) { // detach newRoot so that deleteTree won't delete it
             vector<Node*>& childrenVector = newRoot->parent->children;
             childrenVector.erase(remove(childrenVector.begin(), childrenVector.end(), newRoot), childrenVector.end());
             newRoot->parent = nullptr;
@@ -74,36 +75,34 @@ bool MCTS::isMultipleCapture(const Move &move) {
 // Evaluate if a move leaves our pieces vulnerable to counter-capture
 double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
     int opponent = (player == 1) ? 2 : 1;
-
-    // Get opponent's possible captures BEFORE making the move
-    unordered_set<Position> opponentCapturesBefore;
+    // Use std::set because Position already defines operator<
+    set<Position> opponentCapturesBefore;
     vector<vector<Move>> allMovesBefore = board.getAllPossibleMoves(opponent);
     for (const auto &moves : allMovesBefore) {
         for (const auto &m : moves) {
-            if (m.isCapture()) {
-                opponentCapturesBefore.insert(m.seq.back());
+            Move m_copy = m; // make a copy so we can call isCapture()
+            if (m_copy.isCapture()) {
+                opponentCapturesBefore.insert(m_copy.seq.back());
             }
         }
     }
 
-    // Make the move
     board.makeMove(move, player);
 
-    // Get opponent's possible captures AFTER making the move
-    unordered_set<Position> opponentCapturesAfter;
+    set<Position> opponentCapturesAfter;
     vector<vector<Move>> allMovesAfter = board.getAllPossibleMoves(opponent);
     for (const auto &moves : allMovesAfter) {
         for (const auto &m : moves) {
-            if (isMultipleCapture(m)) { 
+            Move m_copy = m;
+            if (isMultipleCapture(m_copy)) { 
                 board.Undo();
-                return -5.0;
+                return -5.0; // heavy penalty for chain captures
             }
-            opponentCapturesAfter.insert(m.seq.back());
+            opponentCapturesAfter.insert(m_copy.seq.back());
         }
     }
 
     board.Undo();
-
     int newVulnerabilities = opponentCapturesAfter.size() - opponentCapturesBefore.size();
     if (newVulnerabilities > 0) {
         return -2.0 * newVulnerabilities;
@@ -131,7 +130,7 @@ double MCTS::generalBoardPositionEvaluation(Board &board, const Move &move, int 
     double edgeScore = 0.3;
     double defensiveScore = 0.2;
     double scoreMultiplier = 0.2 * (board.col / 7);
-
+    
     for (int i = 0; i < board.row; i++) {
         for (int j = 0; j < board.col; j++) {
             Checker checker = board.board[i][j];
@@ -139,7 +138,6 @@ double MCTS::generalBoardPositionEvaluation(Board &board, const Move &move, int 
                 continue;
             }
             double currentCheckerScore = 0.0;
-            
             if (checker.isKing) {
                 currentCheckerScore += kingScore;
             }
@@ -280,8 +278,6 @@ int MCTS::simulation(Node* node) {
                 if (isPromoting(board, move, player)) {
                     score += 1.0;
                 }
-                // You may choose to include generalBoardPositionEvaluation if desired:
-                // score += generalBoardPositionEvaluation(board, move, player);
                 score += evaluatePieceStructure(board, player);
                 
                 if (score > bestScore) {
@@ -299,7 +295,6 @@ int MCTS::simulation(Node* node) {
         } else {
             noCaptureCount++;
         }
-        
         player = player == 1 ? 2 : 1;
     }
     
@@ -316,14 +311,7 @@ int MCTS::simulation(Node* node) {
 
 void MCTS::backPropagation(Node* node, int result) {
     Node *current = node;
-    double winScore = 0.0;
-    if (result == 1) {
-        winScore = 1.0;
-    } else if (result == 0) {
-        winScore = 0.0;
-    } else {
-        winScore = 0.5;
-    }
+    double winScore = (result == 1) ? 1.0 : (result == 0 ? 0.0 : 0.5);
     while (current != nullptr) {
         current->visits++;
         current->wins += winScore;
@@ -365,6 +353,8 @@ void MCTS::deleteTree(Node* node) {
     }
     delete node;
 }
+
+//----------------------- StudentAI implementation ----------------------------//
 
 StudentAI::StudentAI(int col,int row,int p) : AI(col, row, p) {
     board = Board(col,row,p);

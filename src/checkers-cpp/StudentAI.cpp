@@ -1,466 +1,302 @@
 #include "StudentAI.h"
-#include <cmath>
-#include <algorithm>
-#include <chrono>
-#include <random>
-#include <iostream>
-using namespace std;
-using namespace std::chrono;
 
-//----------------------- MCTS and Node functions ----------------------------//
-
-// MCTS Constructor
-MCTS::MCTS(Node* root, Board &board, int player) {
-    this->root = root;
-    this->root->board = board;
-    this->root->player = player;
+// Constructor implementation
+StudentAI::StudentAI(int player, int boardSize) 
+    : playerID(player), opponentID(player == 1 ? 2 : 1), gameBoard(boardSize), rootNode(nullptr),
+      endgamePhase(false), riskMode(false), totalTimeUsedMs(0) 
+{
+    // Initialize the game board and MCTS root (no moves played yet)
+    // Note: The Board class is assumed to handle initial setup internally.
+    rootNode = new Node(gameBoard, nullptr, playerID);
 }
 
-// Find child node matching the move
-Node* MCTS::findChildNode(Node* node, const Move &move) {
-    for (Node *child : node->children) {
-        if (child->move.seq == move.seq) {
-            return child;
-        }
-    }
-    return nullptr;
-}
-
-// Re-root: reuse tree by setting a new root and deleting unused nodes
-Node* MCTS::reRoot(Node *root, const Move &move) {
-    Node *newRoot = MCTS::findChildNode(root, move);
-    if (newRoot == nullptr) { // not found, delete whole tree
-        MCTS::deleteTree(root);
-        return nullptr;
+// MCTS Node constructor
+StudentAI::Node::Node(const Board& state_, Node* parent_, int playerTurn, const Move& move_)
+    : state(state_), parent(parent_), move(move_), visits(0), wins(0.0), terminal(false), playerToMove(playerTurn) 
+{
+    // Determine if state is terminal (win/draw) at node creation
+    // (Assumes Board has a method to check game over or winner)
+    if (state_.isGameOver()) {              // Pseudocode: check if game ended
+        terminal = true;
+        // No children for terminal node
     } else {
-        if (newRoot->parent != nullptr && newRoot != root) {
-            vector<Node*>& childrenVector = newRoot->parent->children;
-            childrenVector.erase(remove(childrenVector.begin(), childrenVector.end(), newRoot), childrenVector.end());
-            newRoot->parent = nullptr;
-            MCTS::deleteTree(root);
-        }
-        return newRoot;
+        terminal = false;
     }
 }
 
-// Check if a node is fully expanded
-bool Node::isFullyExpanded() {
-    return isLeaf || (unvisitedMoves.size() == 0);
+// Count pieces for a given player (utility)
+int StudentAI::countPieces(int playerId) {
+    // (Assume Board can provide piece count or we iterate board cells)
+    return gameBoard.getPieceCount(playerId);  // using Board's method if available
 }
 
-// UCT value for a node (c constant is tuned to 1.5 here)
-double MCTS::getUCT(Node* node) {
-    if (node->visits == 0) {
-        return INFINITY;
-    }
-    return (double)node->wins / node->visits + 1.5 * sqrt(log(node->parent->visits) / (node->visits + 1e-6));
+// Count total pieces remaining
+int StudentAI::countTotalPieces() {
+    // Sum pieces of both players
+    return countPieces(1) + countPieces(2);
 }
 
-// Return true if the move is a multiple capture (i.e. has more than 2 positions)
-bool MCTS::isMultipleCapture(const Move &move) {
-    return move.seq.size() > 2;
-}
-
-// Evaluate if a move leaves our pieces vulnerable to counter-capture
-double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
-    int opponent = (player == 1) ? 2 : 1;
-
-    // Step 1: Get opponent's possible captures BEFORE making the move
-    unordered_set<Position> opponentCapturesBefore;
-    vector<vector<Move>> allMovesBefore = board.getAllPossibleMoves(opponent);
-    for (const auto &moves : allMovesBefore) {
-        for (const auto &m : moves) {
-            if (m.isCapture()) {
-                opponentCapturesBefore.insert(m.seq.back()); // Store capture positions
-            }
-        }
-    }
-
-    // Step 2: Make the move
-    board.makeMove(move, player);
-
-    // Step 3: Get opponent's possible captures AFTER making the move
-    unordered_set<Position> opponentCapturesAfter;
-    vector<vector<Move>> allMovesAfter = board.getAllPossibleMoves(opponent);
-    for (const auto &moves : allMovesAfter) {
-        for (const auto &m : moves) {
-            if (isMultipleCapture(m)) { 
-                board.Undo();
-                return -5.0; // Heavy penalty for chain captures
-            }
-            opponentCapturesAfter.insert(m.seq.back());
-        }
-    }
-
-    // Step 4: Undo move
-    board.Undo();
-
-    // Step 5: Compute risk penalty
-    int newVulnerabilities = opponentCapturesAfter.size() - opponentCapturesBefore.size();
-    if (newVulnerabilities > 0) {
-        return -2.0 * newVulnerabilities; // Scale penalty based on risk increase
-    }
-
-    return 1.0; // Safe move
-}
-
-// Check if the move results in a promotion (to King)
-bool MCTS::isPromoting(const Board &board, const Move &move, int player) {
-    Position next_pos = move.seq[move.seq.size() - 1];
-    if (player == 1 && next_pos[0] == board.row - 1) {
-        return true;
-    } else if (player == 2 && next_pos[0] == 0) {
-        return true;
-    }
-    return false;
-}
-
-// Evaluate board position after a move using several heuristics:
-// king bonus, central control (with extra bonus if very close to center),
-// edge and defensive positioning.
-double MCTS::generalBoardPositionEvaluation(Board &board, const Move &move, int player) {
-    double score = 0.0;
-    board.makeMove(move, player);
-    
-    string playerColor = player == 1 ? "B" : "W";
-    double kingScore = 0.7;
-    double centerScore = 0.5;
-    double edgeScore = 0.3;
-    double defensiveScore = 0.2;
-    double scoreMultiplier = 0.5 * (board.col / 7);
-    
-    for (int i = 0; i < board.row; i++) {
-        for (int j = 0; j < board.col; j++) {
-            Checker checker = board.board[i][j];
-            if (checker.color != "B" && checker.color != "W") {
-                continue;
-            }
-            double currentCheckerScore = 0.0;
-            if (checker.isKing) {
-                currentCheckerScore += kingScore;
-            }
-            double distanceToCenter = sqrt(pow(i - board.row / 2.0, 2) + pow(j - board.col / 2.0, 2));
-            // Extra bonus for being in the central area
-            if(distanceToCenter < board.row / 4.0) {
-                currentCheckerScore += 0.3;
-            }
-            currentCheckerScore += centerScore / (distanceToCenter + 1.0);
-            if (j == 0 || j == board.col - 1) {
-                currentCheckerScore += edgeScore;
-            }
-            if ((checker.color == "B" && i == 0) || (checker.color == "W" && i == board.row - 1)) {
-                currentCheckerScore += defensiveScore;
-            }
-            if (checker.color == playerColor) {
-                score += currentCheckerScore;
-            } else {
-                score -= currentCheckerScore;
-            }
-        }
-    }
-    
-    board.Undo();
-    return scoreMultiplier * score;
-}
-
-// New heuristic: Evaluate piece structure by rewarding pieces that have friendly neighbors.
-double MCTS::evaluatePieceStructure(Board &board, int player) {
-    double structureScore = 0.0;
-    string playerColor = player == 1 ? "B" : "W";
-    int dr[4] = {-1, -1, 1, 1};
-    int dc[4] = {-1, 1, -1, 1};
-    
-    for (int i = 0; i < board.row; i++) {
-        for (int j = 0; j < board.col; j++) {
-            Checker checker = board.board[i][j];
-            if (checker.color != playerColor)
-                continue;
-            int friendlyNeighbors = 0;
-            for (int d = 0; d < 4; d++) {
-                int ni = i + dr[d], nj = j + dc[d];
-                if (ni >= 0 && ni < board.row && nj >= 0 && nj < board.col) {
-                    if (board.board[ni][nj].color == playerColor) {
-                        friendlyNeighbors++;
-                    }
-                }
-            }
-            if (friendlyNeighbors > 0) {
-                structureScore += 0.3 * friendlyNeighbors;
-            }
-        }
-    }
-    return structureScore;
-}
-
-// Traverse the tree to select a promising node using UCT.
-Node* MCTS::selectNode(Node* node) {
-    Node *current = node;
-    while (current->children.size() > 0 && current->isFullyExpanded()) {
-        double bestUCTValue = -INFINITY;
-        Node *bestChild = nullptr;
-        for (Node *child : current->children) {
-            double uctValue = getUCT(child);
-            if (uctValue > bestUCTValue) {
-                bestUCTValue = uctValue;
-                bestChild = child;
-            }
-        }
-        current = bestChild;
-    }
-    return current;
-}
-
-// Expand the node by selecting an unvisited move and adding a new child.
-Node* MCTS::expandNode(Node* node) {
-    vector<vector<Move>> allMoves = node->board.getAllPossibleMoves(node->player);
-    if (allMoves.size() == 0) {
-        node->isLeaf = true;
-        int result = -1;
-        int opponent = node->player == 1 ? 2 : 1;
-        int winning_player = 3 - node->board.isWin(opponent);
-        if (winning_player == root->player) {
-            result = 1;
-        } else if (winning_player == opponent) {
-            result = 0;
+// Update endgamePhase and riskMode flags based on current board state
+void StudentAI::updateEndgameStatus() {
+    int total = countTotalPieces();
+    endgamePhase = (total < ENDGAME_THRESHOLD);  // fewer than half of initial pieces remain
+    if (endgamePhase) {
+        // If endgame, determine if draw is likely (e.g., material balance)
+        int myCount  = countPieces(playerID);
+        int oppCount = countPieces(opponentID);
+        // Enter risk mode if the game is roughly balanced (likely draw scenario)
+        if (abs(myCount - oppCount) == 0) {
+            riskMode = true;
         } else {
-            result = -1;
+            riskMode = false;
         }
-        backPropagation(node, result);
-        return nullptr;
+    } else {
+        riskMode = false;
     }
-    
-    if (!node->initialized) {
-        for (auto moves : allMoves) {
-            for (auto move : moves) {
-                node->unvisitedMoves.push_back(move);
-            }
-        }
-        node->initialized = true;
-    }
-    
-    if (node->unvisitedMoves.size() == 0) {
-        return nullptr;
-    }
-    
-    int i = rand() % node->unvisitedMoves.size();
-    Move randomMove = node->unvisitedMoves[i];
-    
-    Board newBoard = node->board;
-    newBoard.makeMove(randomMove, node->player);
-    Node *newNode = new Node(node, randomMove, newBoard, node->player == 1 ? 2 : 1);
-    node->children.push_back(newNode);
-    node->unvisitedMoves.erase(node->unvisitedMoves.begin() + i);
-    
-    return newNode;
 }
 
-// Simulation: play moves until terminal state is reached.
-// Improvements include defensive penalties, promotion bonus adjustments,
-// board evaluation and piece structure heuristics.
-int MCTS::simulation(Node* node) {
-    Board board = node->board;
-    int player = node->player;
-    int lastMovedPlayer = player;
-    int noCaptureCount = 0;
-    
-    while (true) {
-        vector<vector<Move>> allMoves = board.getAllPossibleMoves(player);
-        if (noCaptureCount >= 40) { // tie detection to prevent infinite play
-            return -1;
-        }
-        if (allMoves.size() == 0) {
+// Prune and reuse MCTS tree for opponent's move (to avoid rebuilding tree every turn)
+void StudentAI::pruneTreeForNextMove(Node*& currentRoot, const Move& opponentMove) {
+    if (!currentRoot) return;
+    Node* nextRoot = nullptr;
+    // Find the child node that corresponds to the opponent's move
+    for (Node* child : currentRoot->children) {
+        if (child->move == opponentMove) {   // (Assumes Move has equality operator)
+            nextRoot = child;
+            nextRoot->parent = nullptr;
             break;
         }
-        
-        double bestScore = -INFINITY;
-        Move bestMove;
-        for (auto moves : allMoves) {
-            for (auto move : moves) {
-                double score = 0.0;
-                // Direct capture bonus
-                if (move.isCapture()) {
-                    score += 2.0;
-                }
-                // Bonus for multiple captures
-                if (isMultipleCapture(move)) {
-                    score += 2.0;
-                }
-                // Apply defensive penalty/reward based on vulnerability
-                score += isVulnerableMove(board, move, player);
-                
-                // Adjust promotion bonus dynamically (more weight in endgame)
-                double promotionBonus = 1.0;
-                // Manually count the remaining pieces on the board
-                int totalPieces = 0;
-                for (int i = 0; i < board.row; i++) {
-                    for (int j = 0; j < board.col; j++) {
-                        if (board.board[i][j].color == "B" || board.board[i][j].color == "W") {
-                            totalPieces++;
-                        }
-                    }
-                }
-                
-                if (totalPieces < 8) { // Late game, promote bonus is higher
-                    promotionBonus = 1.5;
-                }
-                if (isPromoting(board, move, player)) {
-                    score += promotionBonus;
-                }
-                
-                // Evaluate board position (includes center control)
-                score += generalBoardPositionEvaluation(board, move, player);
-                // Reward piece structure (mutual protection)
-                score += evaluatePieceStructure(board, player);
-                
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestMove = move;
-                }
-            }
-        }
-        
-        board.makeMove(bestMove, player);
-        lastMovedPlayer = player;
-        
-        if (bestMove.isCapture()) {
-            noCaptureCount = 0;
-        } else {
-            noCaptureCount++;
-        }
-        
-        player = (player == 1 ? 2 : 1);
     }
-    
-    int winning_player = 3 - board.isWin(lastMovedPlayer);
-    int opponent = (root->player == 1 ? 2 : 1);
-    if (winning_player == root->player) {
-        return 1;
-    } else if (winning_player == opponent) {
-        return 0;
-    } else {
-        return -1;
+    // Delete the rest of the tree except the subtree for the opponent's move
+    for (Node* child : currentRoot->children) {
+        if (child != nextRoot) {
+            deleteSubtree(child);  // free memory of unused branches
+        }
     }
+    delete currentRoot;  // delete old root node (not needed anymore)
+    currentRoot = nextRoot;
 }
 
-// Backpropagation: update wins/visits up the tree (corrected logic).
-void MCTS::backPropagation(Node* node, int result) {
-    Node *current = node;
-    while (current != nullptr) {
-        current->visits++;
-        if (current->player == root->player) {
-            if (result == 1) {
-                current->wins += 1;
-            } else if (result == 0) {
-                current->wins -= 1;
-            }
-        } else {
-            if (result == 1) {
-                current->wins -= 1;
-            } else if (result == 0) {
-                current->wins += 1;
-            }
-        }
-        current = current->parent;
-    }
-}
-
-// Run MCTS for a fixed number of iterations.
-void MCTS::runMCTS(int time) {
-    for (int i = 0; i < time; i++) {
-        Node* selectedNode = selectNode(root);
-        Node* expandedNode = expandNode(selectedNode);
-        if (expandedNode == nullptr) {
-            continue;
-        }
-        int result = simulation(expandedNode);
-        backPropagation(expandedNode, result);
-    }
-}
-
-// Choose best move based on wins/visits ratio.
-Move MCTS::getBestMove() {
-    double mostWinsPerVisit = -INFINITY;
-    Move bestMove;
-    for (Node *child : root->children) {
-        double currentWinsPerVisit = child->wins / child->visits;
-        if (currentWinsPerVisit > mostWinsPerVisit) {
-            mostWinsPerVisit = currentWinsPerVisit;
-            bestMove = child->move;
-        }
-    }
-    return bestMove;
-}
-
-// Delete tree recursively to free memory.
-void MCTS::deleteTree(Node* node) {
-    if (node == nullptr) {
-        return;
-    }
-    for (Node *child : node->children) {
-        deleteTree(child);
+// Recursively delete a node and all its descendants (to free memory)
+void StudentAI::deleteSubtree(Node* node) {
+    if (!node) return;
+    for (Node* child : node->children) {
+        deleteSubtree(child);
     }
     delete node;
 }
 
-//----------------------- StudentAI implementation ----------------------------//
-
-StudentAI::StudentAI(int col, int row, int p) : AI(col, row, p) {
-    board = Board(col, row, p);
-    board.initializeGame();
-    player = 2;
+// Selection: choose a leaf node to expand using UCT (Upper Confidence Bound)
+StudentAI::Node* StudentAI::selectNode(Node* node) {
+    // Traverse down the tree while node is fully expanded and not terminal
+    while (!node->children.empty() && !node->terminal) {
+        Node* bestChild = nullptr;
+        double bestValue = -1e9;
+        // Calculate UCT value for each child
+        for (Node* child : node->children) {
+            // UCT formula: value = (wins/visits) + C * sqrt(log(parent.visits) / child.visits)
+            double winRate = (child->visits > 0 ? child->wins / child->visits : 0.0);
+            // If riskMode is on and this node corresponds to opponent's perspective, adjust winRate 
+            // (This ensures we continue to favor our winning chances deep into tree)
+            double uctValue = winRate + 1.414 * sqrt(log(node->visits + 1) / (child->visits + 1));
+            if (uctValue > bestValue) {
+                bestValue = uctValue;
+                bestChild = child;
+            }
+        }
+        node = bestChild;
+    }
+    return node;
 }
 
-// Fallback to a random move if time is nearly up.
-Move StudentAI::GetRandomMove(Move move) {
-    if (move.seq.empty()) {
-        player = 1;
-    } else {
-        board.makeMove(move, player == 1 ? 2 : 1);
+// Expansion: add all possible moves from this node (one level)
+void StudentAI::expandNode(Node* node) {
+    if (node->terminal) return;  // no expansion if game is over at this node
+    // Generate all legal moves from this node's state for the player whose turn it is
+    std::vector<Move> legalMoves = node->state.getLegalMoves(node->playerToMove);
+    // If no moves (stalemate) - treat as terminal (draw)
+    if (legalMoves.empty()) {
+        node->terminal = true;
+        return;
     }
-    
-    vector<vector<Move>> allMoves = board.getAllPossibleMoves(player);
-    int i = rand() % allMoves.size();
-    vector<Move> checker_moves = allMoves[i];
-    int j = rand() % checker_moves.size();
-    
-    board.makeMove(checker_moves[j], player);
-    return checker_moves[j];
+    // Create child nodes for each legal move
+    for (const Move& mv : legalMoves) {
+        Board nextState = node->state;
+        nextState.applyMove(mv);  // simulate move
+        // Next player's turn after this move
+        int nextPlayer = (node->playerToMove == 1 ? 2 : 1);
+        Node* child = new Node(nextState, node, nextPlayer, mv);
+        node->children.push_back(child);
+    }
 }
 
-// Main GetMove: re-root the MCTS tree if possible, run iterations, and return the best move.
-Move StudentAI::GetMove(Move move) {
-    auto start = high_resolution_clock::now();
-    auto remainingTime = timeLimit - timeElapsed;
-    if (remainingTime < seconds(4)) {
-        return GetRandomMove(move);
+// Simulation: perform a random playout from the given state and return outcome for AI
+double StudentAI::simulatePlayout(Board state, int currentPlayer) {
+    // Simulate until game ends or until max depth reached
+    int depth = 0;
+    int playerTurn = currentPlayer;
+    while (depth < MAX_SIMULATION_DEPTH) {
+        if (state.isGameOver()) {
+            // Determine winner and return outcome from AI's perspective
+            int winner = state.getWinner();  // e.g., returns 1, 2, or 0 for draw
+            if (winner == 0) {
+                // Game ended in a draw
+                return riskMode ? DRAW_VALUE_RISK : DRAW_VALUE_DEFAULT;
+            } else if (winner == playerID) {
+                // AI wins
+                return 1.0;
+            } else {
+                // AI loses
+                return 0.0;
+            }
+        }
+        // Not terminal yet, check if any legal moves
+        std::vector<Move> moves = state.getLegalMoves(playerTurn);
+        if (moves.empty()) {
+            // No moves means a draw/stalemate situation
+            return riskMode ? DRAW_VALUE_RISK : DRAW_VALUE_DEFAULT;
+        }
+        // Choose a random move to simulate (default policy)
+        int randIndex = rand() % moves.size();
+        state.applyMove(moves[randIndex]);
+        // Switch player turn
+        playerTurn = (playerTurn == 1 ? 2 : 1);
+        depth++;
     }
-    
-    if (move.seq.empty()) {
-        player = 1;
-    } else {
-        board.makeMove(move, player == 1 ? 2 : 1);
-        if (MCTSRoot) {
-            MCTSRoot = MCTS::reRoot(MCTSRoot, move);
+    // If we reach max simulation depth without a terminal result, treat as draw (game likely continues)
+    return riskMode ? DRAW_VALUE_RISK : DRAW_VALUE_DEFAULT;
+}
+
+// Backpropagation: update the node and its ancestors with simulation result
+void StudentAI::backpropagate(Node* node, double result) {
+    Node* current = node;
+    while (current != nullptr) {
+        current->visits += 1;
+        // If the result is from AI's perspective, update win score appropriately
+        // `result` is the score for AI: 1 = win for AI, 0 = loss for AI, (0 < result < 1) for draw or partial.
+        current->wins += result;
+        current = current->parent;
+    }
+}
+
+// After MCTS, choose the best move (highest visit count or best win rate)
+StudentAI::Node* StudentAI::getBestChild(Node* root) {
+    Node* bestChild = nullptr;
+    double bestScore = -1.0;
+    for (Node* child : root->children) {
+        // We can use win-rate or visit count; here we use win-rate bias with visits
+        double winRate = (child->visits > 0 ? child->wins / child->visits : 0.0);
+        // Select the child with highest winRate (or use child->visits for pure MCTS approach)
+        if (winRate > bestScore) {
+            bestScore = winRate;
+            bestChild = child;
         }
     }
-    
-    if (MCTSRoot == nullptr) {
-        MCTSRoot = new Node(nullptr, Move(), board, player);
+    // If tie or near-tie, we could fall back to most visits:
+    if (!bestChild) {
+        int maxVisits = -1;
+        for (Node* child : root->children) {
+            if (child->visits > maxVisits) {
+                maxVisits = child->visits;
+                bestChild = child;
+            }
+        }
     }
-    MCTS mcts = MCTS(MCTSRoot, board, player);
-    mcts.runMCTS(500); // Number of iterations (adjust if needed)
-    Move res = mcts.getBestMove();
-    board.makeMove(res, player);
-    MCTSRoot = MCTS::reRoot(MCTSRoot, res);
-    
-    auto stop = high_resolution_clock::now();
-    timeElapsed += duration_cast<milliseconds>(stop - start);
-    return res;
+    return bestChild;
 }
 
-// Destructor: free the MCTS tree.
-StudentAI::~StudentAI() {
-    if (MCTSRoot != nullptr) {
-        MCTS::deleteTree(MCTSRoot);
+// Primary function to decide the next move
+Move StudentAI::GetMove(const Move& opponentMove) {
+    // Update internal board state with opponent's move
+    if (opponentMove.isValid()) {  // (Assumes Move has a method to check if it’s a real move)
+        gameBoard.applyMove(opponentMove);
     }
+    // **Time Management**: calculate remaining time and allocate for this move
+    long long remainingTime = TIME_LIMIT_MS - totalTimeUsedMs;
+    // For safety, don't use all remaining time; keep a margin
+    long long allocation = std::max(remainingTime - TIME_MARGIN_MS, (long long)50); // at least 50ms
+    auto moveStartTime = std::chrono::steady_clock::now();
+
+    // **Efficiency**: Reuse previous search tree if available and prune irrelevant branches
+    pruneTreeForNextMove(rootNode, opponentMove);
+    if (rootNode == nullptr) {
+        // Create a new root node for current state if none exists (e.g., first move or branch not found)
+        rootNode = new Node(gameBoard, nullptr, playerID);
+    }
+
+    // **Endgame Strategy**: check if we are in endgame phase and adjust strategy flags
+    updateEndgameStatus();
+
+    // Monte Carlo Tree Search loop – runs until allocated time is about to elapse
+    int simulations = 0;
+    while (true) {
+        // Check elapsed time in milliseconds
+        auto now = std::chrono::steady_clock::now();
+        long long elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - moveStartTime).count();
+        if (elapsedMs >= allocation) {
+            break;  // stop MCTS when out of allocated time for this move
+        }
+        // Selection: find a node to expand
+        Node* selected = selectNode(rootNode);
+        // Expansion: if not terminal, expand the selected node
+        if (!selected->terminal && selected->visits > 0) {
+            // If the node has never been visited, we should simulate before expansion (Monte Carlo initial step)
+            expandNode(selected);
+            // If expanded has children, pick one child at random for simulation
+            if (!selected->children.empty()) {
+                selected = selected->children[rand() % selected->children.size()];
+            }
+        } else if (!selected->terminal && selected->visits == 0) {
+            // Node is unvisited and not terminal: expand it now (to generate moves for simulation)
+            expandNode(selected);
+            if (!selected->children.empty()) {
+                selected = selected->children[rand() % selected->children.size()];
+            }
+        }
+        // Simulation: run a playout from the selected node's state
+        double result = simulatePlayout(selected->state, selected->playerToMove);
+        // **Endgame/Risk Adjustment**: If in risk mode and the simulation result was a draw value, it’s already adjusted in simulatePlayout.
+        // Backpropagation: update the tree with the simulation result
+        backpropagate(selected, result);
+        simulations++;
+    }
+
+    // **Time Management**: update total time used by AI
+    auto moveEndTime = std::chrono::steady_clock::now();
+    long long moveDuration = std::chrono::duration_cast<std::chrono::milliseconds>(moveEndTime - moveStartTime).count();
+    totalTimeUsedMs += moveDuration;
+
+    // Choose the best move from the root after MCTS
+    Node* bestChild = getBestChild(rootNode);
+    Move bestMove = bestChild ? bestChild->move : Move();  // fallback to an empty move if something went wrong
+
+    // Apply our chosen move to the actual game board
+    if (bestChild) {
+        gameBoard.applyMove(bestMove);
+        // Prepare for next turn: set the chosen child as new root (reuse tree) and prune others
+        for (Node* child : rootNode->children) {
+            if (child != bestChild) {
+                deleteSubtree(child);
+            }
+        }
+        bestChild->parent = nullptr;
+        // Free the old root and assign the new root
+        delete rootNode;
+        rootNode = bestChild;
+    }
+
+    // If no bestChild (should not happen if moves exist), just return a random legal move to avoid crashing
+    if (!bestChild) {
+        std::vector<Move> moves = gameBoard.getLegalMoves(playerID);
+        if (!moves.empty()) {
+            bestMove = moves[0];
+            gameBoard.applyMove(bestMove);
+            // Reset MCTS tree for next move since we had to pick arbitrarily
+            deleteSubtree(rootNode);
+            rootNode = new Node(gameBoard, nullptr, opponentID);
+        }
+    }
+
+    // Return the selected move
+    return bestMove;
 }

@@ -3,7 +3,9 @@
 
 #include <bits/stdc++.h>   // for standard library (vector, etc.)
 #include <chrono>          // for high-resolution timing
-
+#include "AI.h"
+#include "Board.h"
+#include "Move.h"
 // Forward declarations (if needed)
 struct Move;
 class Board;

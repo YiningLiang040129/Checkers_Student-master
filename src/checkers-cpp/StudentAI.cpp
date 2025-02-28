@@ -81,33 +81,33 @@ double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
     //string opponent_color = player == 1 ? "W" : "B";
     //double score = 0.0;
 
-    int opponent = (player == 1) ? 2 : 1;
-    double score = 0.0;
 
-    // **Step 1: 获取对手在执行此步前的所有吃子走法**
-    unordered_set<Position> opponentCapturesBefore;
+    int opponent = (player == 1) ? 2 : 1;
+
+    // **Step 1: 记录对手在移动前的所有吃子目标点**
+    vector<Position> opponentCapturesBefore;
     vector<vector<Move>> allMovesBefore = board.getAllPossibleMoves(opponent);
     for (const auto &moves : allMovesBefore) {
-        for (const auto &m : moves) {
+        for (auto &m : moves) {
             if (m.isCapture()) {
-                opponentCapturesBefore.insert(m.seq.back()); // 记录吃子目标点
+                opponentCapturesBefore.push_back(m.seq.back()); // 记录吃子目标
             }
         }
     }
 
-    // **Step 2: 执行此步**
+    // **Step 2: 执行 move**
     board.makeMove(move, player);
 
-    // **Step 3: 获取对手在执行此步后的所有吃子走法**
-    unordered_set<Position> opponentCapturesAfter;
+    // **Step 3: 记录对手在移动后的所有吃子目标点**
+    vector<Position> opponentCapturesAfter;
     vector<vector<Move>> allMovesAfter = board.getAllPossibleMoves(opponent);
     for (const auto &moves : allMovesAfter) {
-        for (const auto &m : moves) {
+        for (auto &m : moves) {
             if (isMultipleCapture(m)) { // **如果对手可以连吃，直接大幅扣分**
                 board.Undo();
-                return -5.0; // **重惩罚！避免送连吃**
+                return -5.0; // **强惩罚**
             }
-            opponentCapturesAfter.insert(m.seq.back());
+            opponentCapturesAfter.push_back(m.seq.back());
         }
     }
 
@@ -122,6 +122,7 @@ double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
 
     return 1.0; // **安全的走法**
 }
+
     // Position initialPosition = move.seq[0];
     // Checker initialChecker = board.board[initialPosition.x][initialPosition.y];
     // // a piece isn't vulnerable if it's on the edge

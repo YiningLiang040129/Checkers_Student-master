@@ -81,44 +81,49 @@ double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
     string opponent_color = player == 1 ? "W" : "B";
     double score = 0.0;
 
-    // Position initialPosition = move.seq[0];
-    // Checker initialChecker = board.board[initialPosition.x][initialPosition.y];
-    // // a piece isn't vulnerable if it's on the edge
-    // if (initialChecker.col == 0 || initialChecker.col == board.col - 1 || initialChecker.row == 0 || initialChecker.row == board.row - 1) {
-    //     score = 0.0;
-    // } else { // else award the player's move if was already in danger
-    //     vector<Checker> diagonalPositions = {
-    //         board.board[initialChecker.row - 1][initialChecker.col - 1],
-    //         board.board[initialChecker.row - 1][initialChecker.col + 1],
-    //         board.board[initialChecker.row + 1][initialChecker.col - 1],
-    //         board.board[initialChecker.row + 1][initialChecker.col + 1]  
-    //     };
-    
-    //     // check if the player's piece was already indanger before the move
-    //     for (Checker diagonalChecker : diagonalPositions) {
-    //         if (diagonalChecker.color == ".") { // skip empty positions
-    //             continue;
-    //         }
-    //         bool exitLoop = false;
-    //         vector<Move> opponentMoves = diagonalChecker.getPossibleMoves(&board);
-    //         for (Move opponentMove : opponentMoves) {
-    //             Position current_position = opponentMove.seq[0];
-    //             Position next_position = opponentMove.seq[1];
-    //             // if it's capture
-    //             if (opponentMove.isCapture()) {
-    //                 // award if the player's piece is in danger and it's about to move away
-    //                 if (board.board[(current_position.x + next_position.x) / 2][(current_position.y + next_position.y) / 2].color == current_color) {
-    //                     score += 1.0;
-    //                     exitLoop = true;
-    //                     break;
-    //                 }
-    //             }
-    //         }
-    //         if (exitLoop) { // exit the loop if we already know the player's piece is in danger
-    //             break;
-    //         }
-    //     }
-    // }
+    Position initialPosition = move.seq[0];
+Checker initialChecker = board.board[initialPosition.x][initialPosition.y];
+
+// A piece isn't vulnerable if it's on the edge
+if (initialChecker.col == 0 || initialChecker.col == board.col - 1 || 
+    initialChecker.row == 0 || initialChecker.row == board.row - 1) {
+    score = 0.0;
+} else { 
+    // Else award the player's move if it was already in danger
+    vector<Checker> diagonalPositions = {
+        board.board[initialChecker.row - 1][initialChecker.col - 1],
+        board.board[initialChecker.row - 1][initialChecker.col + 1],
+        board.board[initialChecker.row + 1][initialChecker.col - 1],
+        board.board[initialChecker.row + 1][initialChecker.col + 1]  
+    };
+
+    // Check if the player's piece was already in danger before the move
+    for (Checker diagonalChecker : diagonalPositions) {
+        if (diagonalChecker.color == ".") { // Skip empty positions
+            continue;
+        }
+        bool exitLoop = false;
+        vector<Move> opponentMoves = diagonalChecker.getPossibleMoves(&board);
+        for (Move opponentMove : opponentMoves) {
+            Position current_position = opponentMove.seq[0];
+            Position next_position = opponentMove.seq[1];
+            // If it's capture
+            if (opponentMove.isCapture()) {
+                // Award if the player's piece is in danger and it's about to move away
+                if (board.board[(current_position.x + next_position.x) / 2]
+                              [(current_position.y + next_position.y) / 2].color == current_color) {
+                    score += 1.0;
+                    exitLoop = true;
+                    break;
+                }
+            }
+        }
+        if (exitLoop) { // Exit the loop if we already know the player's piece is in danger
+            break;
+        }
+    }
+}
+
 
 
     board.makeMove(move, player);

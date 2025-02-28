@@ -481,7 +481,7 @@ Move StudentAI::GetMove(Move move) {
         MCTSRoot = new Node(nullptr, Move(), board, player);
     }
     MCTS mcts = MCTS(MCTSRoot, board, player);
-    mcts.runMCTS(1000); // TODO: adjust the number of MCTS iterations
+    mcts.runMCTS(1500); // TODO: adjust the number of MCTS iterations
     Move res = mcts.getBestMove();
 
     board.makeMove(res, player);

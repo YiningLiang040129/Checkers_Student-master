@@ -80,47 +80,43 @@ double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
     //string current_color = player == 1 ? "B" : "W";
     //string opponent_color = player == 1 ? "W" : "B";
     //double score = 0.0;
-
-
     int opponent = (player == 1) ? 2 : 1;
-
-    // **Step 1: 记录对手在移动前的所有吃子目标点**
-    vector<Position> opponentCapturesBefore;
+    
+    // 获取对手的可能吃子情况（移动前）
+    unordered_set<Position> opponentCapturesBefore;
     vector<vector<Move>> allMovesBefore = board.getAllPossibleMoves(opponent);
     for (const auto &moves : allMovesBefore) {
-        for (auto &m : moves) {
-            if (m.isCapture()) {
-                opponentCapturesBefore.push_back(m.seq.back()); // 记录吃子目标
+        for (const auto &m : moves) {
+            if (const_cast<Move&>(m).isCapture()) { // 解决编译错误
+                opponentCapturesBefore.insert(m.seq.back());
             }
         }
     }
 
-    // **Step 2: 执行 move**
+    // 执行当前玩家的移动
     board.makeMove(move, player);
 
-    // **Step 3: 记录对手在移动后的所有吃子目标点**
-    vector<Position> opponentCapturesAfter;
+    // 获取对手的可能吃子情况（移动后）
+    unordered_set<Position> opponentCapturesAfter;
     vector<vector<Move>> allMovesAfter = board.getAllPossibleMoves(opponent);
     for (const auto &moves : allMovesAfter) {
-        for (auto &m : moves) {
-            if (isMultipleCapture(m)) { // **如果对手可以连吃，直接大幅扣分**
-                board.Undo();
-                return -5.0; // **强惩罚**
+        for (const auto &m : moves) {
+            if (const_cast<Move&>(m).isCapture()) { // 解决编译错误
+                opponentCapturesAfter.insert(m.seq.back());
             }
-            opponentCapturesAfter.push_back(m.seq.back());
         }
     }
 
-    // **Step 4: 撤销 move**
+    // 撤销移动
     board.Undo();
 
-    // **Step 5: 计算新增加的漏洞**
+    // 计算新产生的风险
     int newVulnerabilities = opponentCapturesAfter.size() - opponentCapturesBefore.size();
     if (newVulnerabilities > 0) {
-        return -2.0 * newVulnerabilities; // **按照新出现的漏洞数量惩罚**
+        return -2.5 * newVulnerabilities; // 增加惩罚力度
     }
 
-    return 1.0; // **安全的走法**
+    return 1.0; // 安全的移动
 }
 
     // Position initialPosition = move.seq[0];

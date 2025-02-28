@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run matches with various board sizes
 
-NUM_RUNS=100  # number of runs for each board size
+NUM_RUNS=10  # number of runs for each board size
 k=2  # keep the k parameter constant; adjust if needed
 
 # Define arrays for board dimensions.

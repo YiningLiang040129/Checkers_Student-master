@@ -77,47 +77,9 @@ bool MCTS::isMultipleCapture(const Move &move) {
 
 // give score based on the vulnerability of the player's move
 double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
-    //string current_color = player == 1 ? "B" : "W";
-    //string opponent_color = player == 1 ? "W" : "B";
-    //double score = 0.0;
-    int opponent = (player == 1) ? 2 : 1;
-    
-    // 获取对手的可能吃子情况（移动前）
-    unordered_set<Position> opponentCapturesBefore;
-    vector<vector<Move>> allMovesBefore = board.getAllPossibleMoves(opponent);
-    for (const auto &moves : allMovesBefore) {
-        for (const auto &m : moves) {
-            if (const_cast<Move&>(m).isCapture()) { // 解决编译错误
-                opponentCapturesBefore.insert(m.seq.back());
-            }
-        }
-    }
-
-    // 执行当前玩家的移动
-    board.makeMove(move, player);
-
-    // 获取对手的可能吃子情况（移动后）
-    unordered_set<Position> opponentCapturesAfter;
-    vector<vector<Move>> allMovesAfter = board.getAllPossibleMoves(opponent);
-    for (const auto &moves : allMovesAfter) {
-        for (const auto &m : moves) {
-            if (const_cast<Move&>(m).isCapture()) { // 解决编译错误
-                opponentCapturesAfter.insert(m.seq.back());
-            }
-        }
-    }
-
-    // 撤销移动
-    board.Undo();
-
-    // 计算新产生的风险
-    int newVulnerabilities = opponentCapturesAfter.size() - opponentCapturesBefore.size();
-    if (newVulnerabilities > 0) {
-        return -2.5 * newVulnerabilities; // 增加惩罚力度
-    }
-
-    return 1.0; // 安全的移动
-}
+    string current_color = player == 1 ? "B" : "W";
+    string opponent_color = player == 1 ? "W" : "B";
+    double score = 0.0;
 
     // Position initialPosition = move.seq[0];
     // Checker initialChecker = board.board[initialPosition.x][initialPosition.y];
@@ -158,7 +120,7 @@ double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
     //     }
     // }
 
-/*
+
     board.makeMove(move, player);
     Checker checker = board.board[move.seq[move.seq.size() - 1].x][move.seq[move.seq.size() - 1].y];
 
@@ -190,7 +152,7 @@ double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
                 // check if the captured piece is the player's new move
                 if (board.board[(current_position.x + next_position.x) / 2][(current_position.y + next_position.y) / 2].color == current_color) {
                     board.Undo();
-                    return score - 2;
+                    return score - 2.0;
                 }
             }
         }
@@ -199,7 +161,7 @@ double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
     board.Undo();
     return score;
 }
-*/
+
 // check if a move will cause promote
 bool MCTS::isPromoting(const Board &board, const Move &move, int player) {
     Position next_pos = move.seq[move.seq.size() - 1];

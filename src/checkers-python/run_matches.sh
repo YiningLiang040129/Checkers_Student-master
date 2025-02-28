@@ -6,8 +6,8 @@ k=2  # keep the k parameter constant; adjust if needed
 
 # Define arrays for board dimensions.
 # For example, board sizes 5x5, 6x6, ... 10x10:
-rows=(6 7 8)
-cols=(6 7 8)
+rows=(5 6 7)
+cols=(5 6 7)
 
 # Loop over each board size
 for idx in "${!rows[@]}"; do

@@ -152,7 +152,7 @@ double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
                 // check if the captured piece is the player's new move
                 if (board.board[(current_position.x + next_position.x) / 2][(current_position.y + next_position.y) / 2].color == current_color) {
                     board.Undo();
-                    return score - 2.0;
+                    return score - 3.5;
                 }
             }
         }

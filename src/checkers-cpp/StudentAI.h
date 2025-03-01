@@ -45,7 +45,7 @@ public:
 	static Node* findChildNode(Node* node, const Move &move);
 	static void deleteTree(Node* node);
 	static Node* reRoot(Node *root, const Move &move);
-	static int checkWin(const Board &board);
+	static int checkWin(Board &board);
 };
 
 

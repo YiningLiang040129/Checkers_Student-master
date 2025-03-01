@@ -299,76 +299,49 @@ int MCTS::simulation(Node* node) {
     int player = node->player;
     int lastMovedPlayer = player;
     int noCaptureCount = 0;
+
     while (true) {
         vector<vector<Move>> allMoves = board.getAllPossibleMoves(player);
-        if (noCaptureCount >= 40) { // stops simulation if no capture moves have been made for 40 turns (prevent infinite loop, also 40 is the tie count)
+        if (noCaptureCount >= 40) { // Stops if no captures occur in 40 turns
             return -1;
         }
-        if (allMoves.size() == 0) { // stops simulation if a player has no possible moves
+        if (allMoves.empty()) { // If no moves, game over
             break;
         }
 
-        // TODO: need better heurstics
-        double bestScore = -INFINITY;
-        Move bestMove;
-        for (vector<Move> moves : allMoves) {
-            for (Move move : moves) {
-                double score = 0.0;
-                if (move.isCapture()) { // direct capture
-                    score += 2.0;
-                }
+        // **Use completely random move**
+        int i = rand() % allMoves.size();
+        vector<Move> checker_moves = allMoves[i];
+        int j = rand() % checker_moves.size();
+        Move randomMove = checker_moves[j];
 
-                if (isMultipleCapture(move)) { // check if move is a multiple capture
-                    score += 2.0;
-                }
-                
-                score += isVulnerableMove(board, move, player); // check if move leads to direct captures by opponent
-
-                if (isPromoting(board, move, player)) { // check if next move will promote
-                    score += 1.0;
-                }
-
-                // score += generalBoardPositionEvaluation(board, move, player); // evaluate the board position after the move
-
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestMove = move;
-                }   
-            }
-        }
-
-        board.makeMove(bestMove, player);
+        board.makeMove(randomMove, player);
         lastMovedPlayer = player;
 
-        if (bestMove.isCapture()) { // count the number of non capture moves
+        // Reset capture count if it's a capture move, otherwise increase count
+        if (randomMove.isCapture()) {
             noCaptureCount = 0;
         } else {
             noCaptureCount++;
         }
 
-        // simulate random moves for the opponent
-        // int i = rand() % (allMoves.size());
-        // vector<Move> checker_moves = allMoves[i];
-        // int j = rand() % (checker_moves.size());
-        // Move randomMove = checker_moves[j];
-        // board.makeMove(randomMove, player);
-        // lastMovedPlayer = player;
-        
-
-        player = player == 1 ? 2 : 1;
-        
+        // Switch player
+        player = (player == 1) ? 2 : 1;
     }
 
-    int winning_player = checkWin(board); // custom win check, return 1 if black wins, 2 if white wins
-    int opponent = root->player == 1 ? 2 : 1;
-    if (winning_player == root->player) { // return 1 if the root player wins
-        return 1;
-    } else if (winning_player == opponent) { // return 0 if the root player loses
-        return 0;
-    } else { // else return -1 if it's a tie
-        return -1;
+    // **Determine the winner**
+    int winning_player = checkWin(board); // 1 = Black wins, 2 = White wins, -1 = Tie
+    int opponent = (root->player == 1) ? 2 : 1;
+
+    if (winning_player == root->player) {
+        return 1;  // **MCTS player wins**
+    } else if (winning_player == opponent) {
+        return 0;  // **MCTS player loses**
+    } else {
+        return -1; // **Tie**
     }
 }
+
 
 void MCTS::backPropagation(Node* node, int result) {
     Node *current = node;

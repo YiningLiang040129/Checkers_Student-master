@@ -40,7 +40,7 @@ Node* MCTS::reRoot(Node *root, const Move &move) {
 
 // custom win check
 // return 1 if black wins, 2 if white wins, -1 if ties, 0 if still playing
-int MCTS::checkWin(const Board &board) {
+int MCTS::checkWin(Board &board) {
     if (board.tieCount >= board.tieMax) {
         return -1;
     }
@@ -48,6 +48,16 @@ int MCTS::checkWin(const Board &board) {
     if (board.blackCount == 0) {
         return 2;
     } else if (board.whiteCount == 0) {
+        return 1;
+    }
+
+    vector<vector<Move>> allMoves = board.getAllPossibleMoves(1);
+    if (allMoves.size() == 0) {
+        return 2;
+    }
+
+    allMoves = board.getAllPossibleMoves(2);
+    if (allMoves.size() == 0) {
         return 1;
     }
 
@@ -96,7 +106,7 @@ double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
     
     //     // check if the player's piece was already indanger before the move
     //     for (Checker diagonalChecker : diagonalPositions) {
-    //         if (diagonalChecker.color == ".") { // skip empty positions
+    //         if (diagonalChecker.color == "." || diagonalChecker.color == current_color) { // skip empty positions
     //             continue;
     //         }
     //         bool exitLoop = false;
@@ -184,7 +194,7 @@ double MCTS::generalBoardPositionEvaluation(Board &board, const Move &move, int 
     double centerScore = 0.5;
     double edgeScore = 0.3;
     double defensiveScore = 0.2;
-    double scoreMultiplier = 0.2 * (board.col / 7);
+    double scoreMultiplier = 1.0 * (board.col / 7.0);
 
     for (int i = 0; i < board.row; i++) { // iterating the board and give points based on player and opponents position
         for (int j = 0; j < board.col; j++) {
@@ -299,49 +309,76 @@ int MCTS::simulation(Node* node) {
     int player = node->player;
     int lastMovedPlayer = player;
     int noCaptureCount = 0;
-
     while (true) {
         vector<vector<Move>> allMoves = board.getAllPossibleMoves(player);
-        if (noCaptureCount >= 40) { // Stops if no captures occur in 40 turns
+        if (noCaptureCount >= 40) { // stops simulation if no capture moves have been made for 40 turns (prevent infinite loop, also 40 is the tie count)
             return -1;
         }
-        if (allMoves.empty()) { // If no moves, game over
+        if (allMoves.size() == 0) { // stops simulation if a player has no possible moves
             break;
         }
+        
+        Move bestMove;
+        int randomNumber = std::rand() % 100;
+        // control the percentage of using random vs heuristic moves
+        if (randomNumber > 50) {
+             // pure random moves
+            int i = rand() % (allMoves.size());
+            vector<Move> checker_moves = allMoves[i];
+            int j = rand() % (checker_moves.size());
+            bestMove = checker_moves[j];
+        } else {
+            double bestScore = -INFINITY;
+            for (vector<Move> moves : allMoves) {
+                for (Move move : moves) {
+                    double score = 0.0;
+                    if (move.isCapture()) { // direct capture
+                        score += 2.0;
+                    }
+    
+                    if (isMultipleCapture(move)) { // check if move is a multiple capture
+                        score += 2.0;
+                    }
+                    
+                    score += isVulnerableMove(board, move, player); // check if move leads to direct captures by opponent
+    
+                    if (isPromoting(board, move, player)) { // check if next move will promote
+                        score += 1.0;
+                    }
+    
+                    // score += generalBoardPositionEvaluation(board, move, player); // evaluate the board position after the move
+    
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMove = move;
+                    }   
+                }
+            }
+        }
 
-        // **Use completely random move**
-        int i = rand() % allMoves.size();
-        vector<Move> checker_moves = allMoves[i];
-        int j = rand() % checker_moves.size();
-        Move randomMove = checker_moves[j];
-
-        board.makeMove(randomMove, player);
+        board.makeMove(bestMove, player);
         lastMovedPlayer = player;
 
-        // Reset capture count if it's a capture move, otherwise increase count
-        if (randomMove.isCapture()) {
+        if (bestMove.isCapture()) { // count the number of non capture moves
             noCaptureCount = 0;
         } else {
             noCaptureCount++;
         }
 
-        // Switch player
-        player = (player == 1) ? 2 : 1;
+        player = player == 1 ? 2 : 1;
+        
     }
 
-    // **Determine the winner**
-    int winning_player = checkWin(board); // 1 = Black wins, 2 = White wins, -1 = Tie
-    int opponent = (root->player == 1) ? 2 : 1;
-
-    if (winning_player == root->player) {
-        return 1;  // **MCTS player wins**
-    } else if (winning_player == opponent) {
-        return 0;  // **MCTS player loses**
-    } else {
-        return -1; // **Tie**
+    int winning_player = checkWin(board); // custom win check, return 1 if black wins, 2 if white wins
+    int opponent = root->player == 1 ? 2 : 1;
+    if (winning_player == root->player) { // return 1 if the root player wins
+        return 1;
+    } else if (winning_player == opponent) { // return 0 if the root player loses
+        return 0;
+    } else { // else return -1 if it's a tie
+        return -1;
     }
 }
-
 
 void MCTS::backPropagation(Node* node, int result) {
     Node *current = node;
@@ -454,7 +491,7 @@ Move StudentAI::GetMove(Move move) {
         MCTSRoot = new Node(nullptr, Move(), board, player);
     }
     MCTS mcts = MCTS(MCTSRoot, board, player);
-    mcts.runMCTS(1500); // TODO: adjust the number of MCTS iterations
+    mcts.runMCTS(1000); // TODO: adjust the number of MCTS iterations
     Move res = mcts.getBestMove();
 
     board.makeMove(res, player);

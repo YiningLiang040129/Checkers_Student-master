@@ -321,7 +321,7 @@ int MCTS::simulation(Node* node) {
         Move bestMove;
         int randomNumber = std::rand() % 100;
         // control the percentage of using random vs heuristic moves
-        if (randomNumber > 50) {
+        if (randomNumber > 70) {
              // pure random moves
             int i = rand() % (allMoves.size());
             vector<Move> checker_moves = allMoves[i];
@@ -491,7 +491,7 @@ Move StudentAI::GetMove(Move move) {
         MCTSRoot = new Node(nullptr, Move(), board, player);
     }
     MCTS mcts = MCTS(MCTSRoot, board, player);
-    mcts.runMCTS(1000); // TODO: adjust the number of MCTS iterations
+    mcts.runMCTS(3000); // TODO: adjust the number of MCTS iterations
     Move res = mcts.getBestMove();
 
     board.makeMove(res, player);

@@ -321,7 +321,7 @@ int MCTS::simulation(Node* node) {
         Move bestMove;
         int randomNumber = std::rand() % 100;
         // control the percentage of using random vs heuristic moves
-        if (randomNumber > 0) {
+        if (randomNumber > 40) {
              // pure random moves
             int i = rand() % (allMoves.size());
             vector<Move> checker_moves = allMoves[i];

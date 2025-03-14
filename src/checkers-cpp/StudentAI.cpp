@@ -490,6 +490,7 @@ Move StudentAI::GetRandomMove(Move move) {
 Move StudentAI::GetMove(Move move) {
     auto start = high_resolution_clock::now();
     auto remainingTime = timeLimit - timeElapsed;
+    int MCT_ITERATIONS = 100;
     if (remainingTime < seconds(2)) { // return random move if only has 2 seconds left
         return GetRandomMove(move); // no need to keep track of the remaining time if started using random moves
     } else if (remainingTime < seconds(10)) { 

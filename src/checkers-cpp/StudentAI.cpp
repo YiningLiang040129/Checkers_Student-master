@@ -73,7 +73,7 @@ double MCTS::getUCT(Node* node) {
         return INFINITY;
     }
     // TODO: fine tune the c constant value
-    return (double)node->wins / node->visits + 1.5 * sqrt(log(node->parent->visits) / (node->visits + 1e-6));
+    return (double)node->wins / node->visits + sqrt(2) * sqrt(log(node->parent->visits) / (node->visits + 1e-6));
 }
 
 // force capture that can capture multiple pieces
@@ -131,49 +131,82 @@ double MCTS::isVulnerableMove(Board &board, const Move &move, int player) {
     // }
 
 
-    board.makeMove(move, player);
-    Checker checker = board.board[move.seq[move.seq.size() - 1].x][move.seq[move.seq.size() - 1].y];
+    // board.makeMove(move, player);
+    // Checker checker = board.board[move.seq[move.seq.size() - 1].x][move.seq[move.seq.size() - 1].y];
 
-    // if new position is on either edge, then it can't be captured
-    if (checker.col == 0 || checker.col == board.col - 1 || checker.row == 0 || checker.row == board.row - 1) {
-        board.Undo();
-        return score + 0.5;
+    // // if new position is on either edge, then it can't be captured
+    // if (checker.col == 0 || checker.col == board.col - 1 || checker.row == 0 || checker.row == board.row - 1) {
+    //     board.Undo();
+    //     return score + 0.5;
+    // }
+
+    // // all possible diagonal positions
+    // vector<Checker> diagonalPositions = {
+    //     board.board[checker.row - 1][checker.col - 1],
+    //     board.board[checker.row - 1][checker.col + 1],
+    //     board.board[checker.row + 1][checker.col - 1],
+    //     board.board[checker.row + 1][checker.col + 1]  
+    // };
+
+    // // for each of the opponent's piece on diagnoal positions, check if it can capture the player's piece
+    // for (Checker diagonalChecker : diagonalPositions) {
+    //     if (diagonalChecker.color == ".") { // skip empty positions
+    //         continue;
+    //     }
+    //     vector<Move> opponentMoves = diagonalChecker.getPossibleMoves(&board);
+    //     for (Move opponentMove : opponentMoves) {
+    //         Position current_position = opponentMove.seq[0];
+    //         Position next_position = opponentMove.seq[1];
+    //         // if it's capture
+    //         if (opponentMove.isCapture()) {
+    //             // check if the captured piece is the player's new move
+    //             if (board.board[(current_position.x + next_position.x) / 2][(current_position.y + next_position.y) / 2].color == current_color) {
+    //                 board.Undo();
+    //                 return score - 2.0;
+    //             }
+    //         }
+    //     }
+    // }
+
+    // board.Undo();
+    // return score;
+
+    //--------------------------------------------------------------------------------------------------------------
+
+    int current_player = player;
+    int opponent = player == 1 ? 2 : 1;
+
+    int numCapturesBefore = 0;
+    vector<vector<Move>> allMoves = board.getAllPossibleMoves(opponent);
+    for (vector<Move> moves : allMoves) {
+        for (Move move : moves) {
+            if (move.isCapture()) {
+                numCapturesBefore += move.seq.size() - 1;
+            }
+        }
     }
 
-    // all possible diagonal positions
-    vector<Checker> diagonalPositions = {
-        board.board[checker.row - 1][checker.col - 1],
-        board.board[checker.row - 1][checker.col + 1],
-        board.board[checker.row + 1][checker.col - 1],
-        board.board[checker.row + 1][checker.col + 1]  
-    };
-
-    // for each of the opponent's piece on diagnoal positions, check if it can capture the player's piece
-    for (Checker diagonalChecker : diagonalPositions) {
-        if (diagonalChecker.color == ".") { // skip empty positions
-            continue;
-        }
-        vector<Move> opponentMoves = diagonalChecker.getPossibleMoves(&board);
-        for (Move opponentMove : opponentMoves) {
-            Position current_position = opponentMove.seq[0];
-            Position next_position = opponentMove.seq[1];
-            // if it's capture
-            if (opponentMove.isCapture()) {
-                // check if the captured piece is the player's new move
-                if (board.board[(current_position.x + next_position.x) / 2][(current_position.y + next_position.y) / 2].color == current_color) {
-                    board.Undo();
-                    return score - 2.0;
-                }
+    board.makeMove(move, current_player);
+    int numCapturesAfter = 0;
+    allMoves = board.getAllPossibleMoves(opponent);
+    for (vector<Move> moves : allMoves) {
+        for (Move move : moves) {
+            if (move.isCapture()) {
+                numCapturesAfter += move.seq.size() - 1;
             }
         }
     }
 
     board.Undo();
-    return score;
+    return numCapturesBefore - numCapturesAfter;
 }
 
 // check if a move will cause promote
 bool MCTS::isPromoting(const Board &board, const Move &move, int player) {
+    Checker checker = board.board[move.seq[0].x][move.seq[0].y];
+    if (checker.isKing) { // skip if it's already king
+        return false;
+    }
     Position next_pos = move.seq[move.seq.size() - 1];
     if (player == 1 && next_pos[0] == board.row - 1) { // player 1 promotes if reaches the last row
         return true;
@@ -255,22 +288,7 @@ Node* MCTS::selectNode(Node* node) {
 
 Node* MCTS::expandNode(Node* node) {
     vector<vector<Move>> allMoves = node->board.getAllPossibleMoves(node->player);
-    if (allMoves.size() == 0) { // if the node has no possible moves, then its a leaf(terminal?) node
-        node->isLeaf = true;
-
-        // directly run backpropagation if the selected node is a leaf node
-        int result = -1;
-        int opponent = node->player == 1 ? 2 : 1; // if current player has no move, then the last moved player is the opponent
-        int winning_player = checkWin(node->board); // custom wi check, return 1 if black wins, 2 if white wins
-        if (winning_player == root->player) { // return 1 if the root player wins
-            result = 1;
-        } else if (winning_player == opponent) { // return 0 if the root player loses
-            result = 0;
-        } else { // else return -1 if it's a tie
-            result = -1;
-        }
-
-        backPropagation(node, result);
+    if (allMoves.size() == 0) { // return nullptr if the node has no possible moves
         return nullptr;
     }
 
@@ -321,7 +339,7 @@ int MCTS::simulation(Node* node) {
         Move bestMove;
         int randomNumber = std::rand() % 100;
         // control the percentage of using random vs heuristic moves
-        if (randomNumber > 0) {
+        if (randomNumber < 70) {
              // pure random moves
             int i = rand() % (allMoves.size());
             vector<Move> checker_moves = allMoves[i];
@@ -333,20 +351,17 @@ int MCTS::simulation(Node* node) {
                 for (Move move : moves) {
                     double score = 0.0;
                     if (move.isCapture()) { // direct capture
-                        score += 2.0;
-                    }
-    
-                    if (isMultipleCapture(move)) { // check if move is a multiple capture
-                        score += 2.0;
+                        score += 4.0;
+                        score += move.seq.size() - 1; // give extra score for multiple captures
                     }
                     
-                    score += isVulnerableMove(board, move, player); // check if move leads to direct captures by opponent
+                    // score += isVulnerableMove(board, move, player); // check if move leads to direct captures by opponent
     
                     if (isPromoting(board, move, player)) { // check if next move will promote
                         score += 1.0;
                     }
     
-                    // score += generalBoardPositionEvaluation(board, move, player); // evaluate the board position after the move
+                    score += generalBoardPositionEvaluation(board, move, player); // evaluate the board position after the move
     
                     if (score > bestScore) {
                         bestScore = score;
@@ -384,47 +399,50 @@ void MCTS::backPropagation(Node* node, int result) {
     Node *current = node;
     double winScore = 0.0;
 
-    // increasing number of wins for all nodes on the path based on root player's perspective
-    if (result == 1) {
-        winScore = 1.0;
-    } else if (result == 0) {
-        winScore = 0.0;
-    } else {
-        winScore = 0.5;
-    }
-
     while (current != nullptr) { // repeatedly going up the tree and update wins and visits
         current->visits++;
 
-        current->wins += winScore;
+        // increasing number of wins for each node based on root player's perspective (but flipped)
+        // not sure why but it just works
+        if (result == -1) { // Tie
+            winScore = 0.5;
+        } else if (current->player == root->player) { // +0 if root player wins, +1 if loses
+            winScore = (result == 0) ? 1.0 : 0.0;
+        } else { // vice versa
+            winScore = (result == 1) ? 1.0 : 0.0;
+        }
 
+        current->wins += winScore;
         current = current->parent;
     }
 }
 
 
 void MCTS::runMCTS(int time) {
+    auto start = high_resolution_clock::now();
     for (int i = 0; i < time; i++) {
+        // time limit for each move
+        if (duration_cast<milliseconds>(high_resolution_clock::now() - start) > seconds(20)) {
+            break;
+        }
         Node* selectedNode = selectNode(root); 
         Node* expandedNode = expandNode(selectedNode);
-        if (expandedNode == nullptr) { // selected node is a leaf node, backpropagation already ran in expandNode
-            continue;
+        if (expandedNode == nullptr) { // if can't expand, the run simulation on the selected node
+            expandedNode = selectedNode;
         }
         int result = simulation(expandedNode);
         backPropagation(expandedNode, result);
     }
-    
 }
 
-// picking the best move based the the most wins per visit
+// picking the best move based the the most visits
 Move MCTS::getBestMove() { 
-    double mostWinsPerVisit = -INFINITY;
+    double mostVisit = -INFINITY;
     Move bestMove;
     for (Node *child : root->children) { // find the child with the most visits
         // cout << "Child move: " << child->move.toString() << ", visits: " << child->visits << ", wins: " << child->wins << endl;
-        double currentWinsPerVisit = child->wins / child->visits;
-        if (currentWinsPerVisit > mostWinsPerVisit) {
-            mostWinsPerVisit = currentWinsPerVisit;
+        if (child->visits > mostVisit) {
+            mostVisit = child->visits;
             bestMove = child->move;
         }
     }
@@ -472,8 +490,14 @@ Move StudentAI::GetRandomMove(Move move) {
 Move StudentAI::GetMove(Move move) {
     auto start = high_resolution_clock::now();
     auto remainingTime = timeLimit - timeElapsed;
-    if (remainingTime < seconds(4)) { // return random move if only has 4 seconds left
+    if (remainingTime < seconds(2)) { // return random move if only has 2 seconds left
         return GetRandomMove(move); // no need to keep track of the remaining time if started using random moves
+    } else if (remainingTime < seconds(10)) { 
+        MCTS_ITERATIONS = 500;
+    } else if (remainingTime < seconds(30)) { // adjust the number of MCTS iterations based on the remaining time
+        MCTS_ITERATIONS = 1000;
+    } else if (remainingTime < seconds(60)) {
+        MCTS_ITERATIONS = 3000;
     }
 
     if (move.seq.empty())
@@ -491,7 +515,7 @@ Move StudentAI::GetMove(Move move) {
         MCTSRoot = new Node(nullptr, Move(), board, player);
     }
     MCTS mcts = MCTS(MCTSRoot, board, player);
-    mcts.runMCTS(2500); // TODO: adjust the number of MCTS iterations
+    mcts.runMCTS(MCTS_ITERATIONS); // TODO: adjust the number of MCTS iterations
     Move res = mcts.getBestMove();
 
     board.makeMove(res, player);

@@ -60,8 +60,6 @@ public:
 	virtual Move GetMove(Move move);
 	Move GetRandomMove(Move move);
 	~StudentAI();
-private:
-	int MCTS_ITERATIONS;
 	
 };
 

@@ -59,8 +59,10 @@ public:
 	StudentAI(int col, int row, int p);
 	virtual Move GetMove(Move move);
 	Move GetRandomMove(Move move);
-	int MCTS_ITERATIONS;
 	~StudentAI();
+private:
+	int MCTS_ITERATIONS;
+	
 };
 
 #endif //STUDENTAI_H

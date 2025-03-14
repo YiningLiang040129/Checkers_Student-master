@@ -54,13 +54,13 @@ class StudentAI :public AI
 public:
     Board board;
 	Node* MCTSRoot = nullptr;
+	int MCTS_ITERATIONS = 10000;
 	duration<double, std::milli> timeElapsed = duration<double, std::milli>::zero();
 	const duration<double, std::milli> timeLimit = minutes(8); // 8 minutes total time limit
 	StudentAI(int col, int row, int p);
 	virtual Move GetMove(Move move);
 	Move GetRandomMove(Move move);
 	~StudentAI();
-	
 };
 
 #endif //STUDENTAI_H

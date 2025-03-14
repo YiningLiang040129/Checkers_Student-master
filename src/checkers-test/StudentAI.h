@@ -2,6 +2,10 @@
 #define STUDENTAI_H
 #include "AI.h"
 #include "Board.h"
+#include <chrono>
+#include <random>
+#include <algorithm>
+using namespace std::chrono;
 #pragma once
 
 //The following part should be completed by students.
@@ -12,9 +16,10 @@ public:
 	Node* parent;
 	vector<Node*> children;
 	vector<Move> unvisitedMoves;
-	int wins = 0;
+	double wins = 0;
 	int visits = 0;
 	int player;
+	bool initialized = false;
 	bool isLeaf = false;
 	Move move;
 	Board board;
@@ -25,7 +30,7 @@ public:
 class MCTS {
 public:
 	Node* root;
-	MCTS(Node* root, Board board, int player);
+	MCTS(Node* root, Board &board, int player);
 	Node* selectNode(Node* node);
 	Node* expandNode(Node* node);
 	int simulation(Node* node);
@@ -33,10 +38,14 @@ public:
 	double getUCT(Node* node);
 	void runMCTS(int time);
 	Move getBestMove();
-	bool causeMoreCaptureByOpponent(Board board, Move move, int player);
-
-	void deleteTree(Node* node);
-	~MCTS();
+	bool isMultipleCapture(const Move &move);
+	double isVulnerableMove(Board &board, const Move &move, int player);
+	bool isPromoting(const Board &board, const Move &move, int player);
+	double generalBoardPositionEvaluation(Board &board, const Move &move, int player);
+	static Node* findChildNode(Node* node, const Move &move);
+	static void deleteTree(Node* node);
+	static Node* reRoot(Node *root, const Move &move);
+	static int checkWin(Board &board);
 };
 
 
@@ -44,8 +53,14 @@ class StudentAI :public AI
 {
 public:
     Board board;
+	Node* MCTSRoot = nullptr;
+	duration<double, std::milli> timeElapsed = duration<double, std::milli>::zero();
+	const duration<double, std::milli> timeLimit = minutes(8); // 8 minutes total time limit
 	StudentAI(int col, int row, int p);
-	virtual Move GetMove(Move board);
+	virtual Move GetMove(Move move);
+	Move GetRandomMove(Move move);
+	int MCTS_ITERATIONS;
+	~StudentAI();
 };
 
 #endif //STUDENTAI_H

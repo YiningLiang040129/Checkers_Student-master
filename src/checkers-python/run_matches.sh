@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run matches with various board sizes
 
-NUM_RUNS=50  # number of runs for each board size
+NUM_RUNS=5  # number of runs for each board size
 k=2  # keep the k parameter constant; adjust if needed
 
 # Define arrays for board dimensions.
@@ -23,7 +23,7 @@ for idx in "${!rows[@]}"; do
     
     for i in $(seq 1 $NUM_RUNS); do
         # Swap the order so our AI is Player 2
-        OUTPUT=$(python3 main.py $col $row $k l ../checkers-cpp/main main.py)
+        OUTPUT=$(python3 main.py $col $row $k l ../checkers-cpp/main ../checkers-cpp2/main)
         
         # Check which player won (or if it was a tie)
         if echo "$OUTPUT" | grep -iq "player 1 wins"; then
@@ -39,8 +39,8 @@ for idx in "${!rows[@]}"; do
 
     echo "-------------------------------------"
     echo "Results for board size ${col} x ${row}:"
-    echo "Player 1 (../checkers-cpp/main) wins: $winsAI1"
-    echo "Player 2 (Random_AI) wins: $winsAI2"
+    echo "Player 1 (70%random) wins: $winsAI1"
+    echo "Player 2 (100%random) wins: $winsAI2"
     echo "Ties: $ties"
 done
 
@@ -57,7 +57,7 @@ for idx in "${!rows[@]}"; do
     
     for i in $(seq 1 $NUM_RUNS); do
         # Swap the order so our AI is Player 2
-        OUTPUT=$(python3 main.py $col $row $k l main.py ../checkers-cpp/main)
+        OUTPUT=$(python3 main.py $col $row $k l ../checkers-cpp2/main ../checkers-cpp/main)
         
         # Check which player won (or if it was a tie)
         if echo "$OUTPUT" | grep -iq "player 1 wins"; then
@@ -73,7 +73,7 @@ for idx in "${!rows[@]}"; do
 
     echo "-------------------------------------"
     echo "Results for board size ${col} x ${row}:"
-    echo "Player 1 (Random_AI) wins: $winsAI1"
-    echo "Player 2 (../checkers-cpp/main) wins: $winsAI2"
+    echo "Player 1 (100%random) wins: $winsAI1"
+    echo "Player 2 (70%random) wins: $winsAI2"
     echo "Ties: $ties"
 done

@@ -54,7 +54,7 @@ class StudentAI :public AI
 public:
     Board board;
 	Node* MCTSRoot = nullptr;
-	int MCTS_ITERATIONS = 10000;
+	int MCTS_ITERATIONS = 2000;
 	duration<double, std::milli> timeElapsed = duration<double, std::milli>::zero();
 	const duration<double, std::milli> timeLimit = minutes(8); // 8 minutes total time limit
 	StudentAI(int col, int row, int p);

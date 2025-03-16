@@ -40,7 +40,7 @@ for idx in "${!rows[@]}"; do
     echo "-------------------------------------"
     echo "Results for board size ${col} x ${row}:"
     echo "Player 1 (../checkers-cpp/main) wins: $winsAI1"
-    echo "Player 2 (Average_AI) wins: $winsAI2"
+    echo "Player 2 (Poor_AI) wins: $winsAI2"
     echo "Ties: $ties"
 done
 
@@ -73,7 +73,7 @@ for idx in "${!rows[@]}"; do
 
     echo "-------------------------------------"
     echo "Results for board size ${col} x ${row}:"
-    echo "Player 1 (Average_AI) wins: $winsAI1"
+    echo "Player 1 (Poor_AI) wins: $winsAI1"
     echo "Player 2 (../checkers-cpp/main) wins: $winsAI2"
     echo "Ties: $ties"
 done
